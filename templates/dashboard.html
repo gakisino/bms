@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    /* DESIGN DO DASHBOARD */
+    .dashboard { padding: 30px; background: #f8fafc; }
+    
+    .cards { 
+        display: grid; 
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); 
+        gap: 20px; 
+        margin-bottom: 30px; 
+    }
+
+    .card {
+        background: #fff;
+        padding: 20px;
+        border-radius: 12px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.02);
+        border: 1px solid #e2e8f0;
+    }
+
+    .card-header { color: #64748b; font-size: 14px; font-weight: 600; margin-bottom: 10px; }
+    .card-value { font-size: 28px; font-weight: 700; color: #1e293b; }
+    .card-info { font-size: 12px; color: #94a3b8; margin-top: 5px; }
+
+    /* LISTA DE AGENDAMENTOS RECENTES (O CORAÇÃO DO AJUSTE) */
+    .panel {
+        background: #fff;
+        padding: 25px;
+        border-radius: 15px;
+        border: 1px solid #e2e8f0;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+    }
+
+    .panel h2 { font-size: 18px; color: #1e293b; margin-bottom: 20px; }
+
+    .list-item {
+        display: flex !important; /* ALINHA EM LINHA */
+        align-items: center !important; /* CENTRALIZA VERTICALMENTE */
+        padding: 15px;
+        border-bottom: 1px solid #f1f5f9;
+        transition: background 0.2s;
+        gap: 15px; /* ESPAÇO ENTRE OS ITENS */
+    }
+
+    .list-item:last-child { border-bottom: none; }
+    .list-item:hover { background: #f8fafc; border-radius: 10px; }
+
+    .avatar {
+        width: 45px;
+        height: 45px;
+        background: #6366f1;
+        color: white;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 16px;
+        flex-shrink: 0; /* IMPEDE O AVATAR DE AMASSAR */
+    }
+
+    .info-container {
+        flex: 1; /* FAZ O TEXTO OCUPAR O ESPAÇO CENTRAL */
+        display: flex;
+        flex-direction: column;
+    }
+
+    .info-container strong { color: #1e293b; font-size: 15px; }
+    .info-container small { color: #64748b; font-size: 13px; margin-top: 2px; }
+
+    /* STATUS STYLE */
+    .status {
+        padding: 6px 14px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .status.ok { background: #dcfce7; color: #15803d; }
+    .status.pending { background: #fef9c3; color: #a16207; }
+</style>
+
+<div class="dashboard">
+    <h1>Dashboard</h1>
+    <p class="subtitle">Bem-vindo ao painel de controle do BMS Sistema</p>
+
+    <div class="cards">
+        <div class="card">
+            <div class="card-header">📅 Total de Agendamentos</div>
+            <div class="card-value">128</div>
+            <div class="card-info">+12% em relação ao mês anterior</div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">👤 Usuários Ativos</div>
+            <div class="card-value">45</div>
+            <div class="card-info">8 novos este mês</div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">⏰ Agendamentos Hoje</div>
+            <div class="card-value">12</div>
+            <div class="card-info">3 pendentes de confirmação</div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">✔ Taxa de Conclusão</div>
+            <div class="card-value">94%</div>
+            <div class="card-info">+2.5% em relação à semana passada</div>
+        </div>
+    </div>
+
+    <div class="panel">
+        <h2>Agendamentos Recentes</h2>
+
+        <div class="list">
+            <div class="list-item">
+                <div class="avatar" style="background: #6366f1;">M</div>
+                <div class="info-container">
+                    <strong>Maria Santos</strong>
+                    <small>21/03/2026 às 09:00</small>
+                </div>
+                <span class="status ok">Confirmado</span>
+            </div>
+
+            <div class="list-item">
+                <div class="avatar" style="background: #f59e0b;">C</div>
+                <div class="info-container">
+                    <strong>Carlos Oliveira</strong>
+                    <small>21/03/2026 às 10:30</small>
+                </div>
+                <span class="status pending">Pendente</span>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

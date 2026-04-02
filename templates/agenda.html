@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    /* DESIGN PREMIUM - AGENDA */
+    .agenda-page { padding: 30px; background: #f8fafc; font-family: 'Inter', system-ui, sans-serif; }
+
+    .agenda-filtros-top {
+        display: flex; align-items: center; gap: 20px; background: rgba(255, 255, 255, 0.9);
+        padding: 20px 25px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+        margin-bottom: 30px; border: 1px solid #e2e8f0; backdrop-filter: blur(10px);
+    }
+
+    .btn-hoje { background: #fff; border: 1px solid #e2e8f0; padding: 10px 20px; border-radius: 10px; cursor: pointer; font-weight: 600; }
+    .nav-arrows button { background: #fff; border: 1px solid #e2e8f0; width: 40px; height: 40px; border-radius: 50%; cursor: pointer; }
+    
+    .input-date, .select-unidade { padding: 10px 15px; border-radius: 10px; border: 1px solid #e2e8f0; min-width: 180px; }
+
+    .btn-filtrar {
+        background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+        color: white; border: none; padding: 12px 28px; border-radius: 12px; cursor: pointer; font-weight: 700;
+    }
+
+    /* GRID DA AGENDA */
+    .agenda-body { background: white; border-radius: 20px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.03); }
+    .agenda-grid { display: flex; position: relative; min-height: 1040px; } /* 13h (8-21) * 80px */
+    
+    .agenda-hours { width: 100px; border-right: 1px solid #f1f5f9; background: #f8fafc; flex-shrink: 0; }
+    .hour { height: 80px; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; color: #94a3b8; border-bottom: 1px solid #f1f5f9; }
+    
+    .agenda-events { flex: 1; position: relative; background-image: linear-gradient(#f1f5f9 1px, transparent 1px); background-size: 100% 80px; }
+    
+    .event {
+        position: absolute; left: 10px; right: 10px; background: #ffffff; color: #1e293b;
+        border-radius: 12px; padding: 12px; font-size: 13px; cursor: pointer;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.08); border-left: 6px solid #4f46e5;
+        transition: all 0.2s ease; z-index: 10; min-height: 60px;
+    }
+    .event:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(0,0,0,0.12); z-index: 50; }
+</style>
+
+<div class="agenda-page">
+    <div class="agenda-filtros-top">
+        <button class="btn-hoje" onclick="location.href='/agenda'">Hoje</button>
+        <div class="nav-arrows">
+            <button onclick="mudarDia(-1)"> < </button>
+            <button onclick="mudarDia(1)"> > </button>
+        </div>
+        <input type="date" id="filtro-data" class="input-date" value="{{ data_selecionada or data }}">
+        <select id="filtro-unidade" class="select-unidade">
+            <option value="">Todas as unidades</option>
+            {% for u in unidades %}
+                <option value="{{ u.id }}" {% if unidade_selecionada|int == u.id %}selected{% endif %}>{{ u.nome }}</option>
+            {% endfor %}
+        </select>
+        <button type="button" class="btn-filtrar" onclick="filtrarAgenda()">🔍 Filtrar Agenda</button>
+    </div>
+
+    <div class="agenda-body">
+        <div class="agenda-grid">
+            <div class="agenda-hours">
+                {% for h in range(8, 21) %}
+                    <div class="hour">{{ "%02d:00" % h }}</div>
+                {% endfor %}
+            </div>
+            <div class="agenda-events">
+                {% for a in agendamentos %}
+                    {# 1. Pegamos a hora e o minuto total #}
+                    {% set total_seg = a.hora.total_seconds() if a.hora.total_seconds is defined else a.hora.seconds %}
+                    {% set h_p = total_seg // 3600 %}
+                    {% set m_p = (total_seg // 60) % 60 %}
+                    
+                    {# 2. AJUSTE DE OFFSET: #}
+                    {# Se sua grade visual começa às 08:00, precisamos subtrair 8 da hora atual #}
+                    {# Se começar às 07:00, mude para - 7 #}
+                    {% set hora_ajustada = h_p - 8 %}
+                    
+                    {# 3. Cálculo final do TOP: #}
+                    {# (Hora ajustada * 80px da altura da linha) + (proporcional dos minutos) #}
+                    {% set p_top = (hora_ajustada * 80) + (m_p * 80 // 60) %}
+
+                    <div class="event" 
+                        style="top: {{ p_top }}px; min-height: 60px;" 
+                        onclick="editarAgendamento('{{ a.id }}')">
+                        <strong style="color: #4f46e5;">{{ a.nome }}</strong>
+                        <div style="font-size: 11px; color: #64748b; margin-top: 4px;">
+                            🕒 {{ "%02d:%02d" | format(h_p, m_p) }} • {{ a.unidade_nome or a.sigla }}
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+               
+        </div>
+    </div>
+</div>
+
+
+
+
+
+
+<script>
+    function filtrarAgenda() {
+        const d = document.getElementById('filtro-data').value;
+        const u = document.getElementById('filtro-unidade').value;
+        window.location.href = `/agenda?data=${d}&unidade=${u}`;
+    }
+
+    function mudarDia(offset) {
+        const inputData = document.getElementById('filtro-data');
+        let d = new Date(inputData.value + 'T00:00:00');
+        d.setDate(d.getDate() + offset);
+        inputData.value = d.toISOString().split('T')[0];
+        filtrarAgenda();
+    }
+
+    function editarAgendamento(id) {
+        console.log("Abrindo edição do agendamento ID:", id);
+        // Chame aqui sua função de abrir modal se necessário
+    }
+
+window.onload = function() {
+    const eventos = document.querySelectorAll('.event');
+    const grupos = {};
+
+    // 1. Agrupar eventos que estão na mesma posição 'top' (ou muito próximos)
+    eventos.forEach(ev => {
+        const top = parseInt(ev.style.top);
+        // Agrupa se a diferença for menor que 40px (meia hora)
+        let chave = Math.round(top / 40) * 40; 
+        if (!grupos[chave]) grupos[chave] = [];
+        grupos[chave].push(ev);
+    });
+
+    // 2. Ajustar largura e posição lateral de cada grupo
+    Object.values(grupos).forEach(grupo => {
+        const total = grupo.length;
+        if (total > 1) {
+            const largura = 90 / total; // Divide o espaço (90% pra sobrar margem)
+            grupo.forEach((ev, index) => {
+                ev.style.width = largura + "%";
+                ev.style.left = (index * largura + 5) + "%";
+                ev.style.zIndex = 10 + index;
+            });
+        }
+    });
+};
+
+
+</script>
+{% endblock %}

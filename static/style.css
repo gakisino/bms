@@ -1,0 +1,446 @@
+/* =========================
+   RESET & BASE
+========================= */
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: #f4f6f9;
+    color: #333;
+}
+
+.layout {
+    display: flex;
+}
+
+/* =========================
+   SIDEBAR
+========================= */
+.sidebar {
+    width: 220px;
+    background: #111827;
+    color: white;
+    height: 100vh;
+    padding: 20px 10px;
+    position: sticky;
+    top: 0;
+}
+
+.logo {
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.logo img {
+    width: 50px;
+}
+
+.logo-text {
+    display: block;
+    margin-top: 5px;
+    font-size: 14px;
+}
+
+.menu {
+    display: flex;
+    flex-direction: column;
+}
+
+.menu-item {
+    display: flex;
+    align-items: center;
+    padding: 15px 25px;
+    gap: 15px;
+    text-decoration: none;
+    transition: all 0.2s;
+    overflow: hidden; /* Evita que o texto "Sair" apareça de relance */
+}
+
+.menu-item:hover {
+    background: #1f2937;
+    }
+
+.logout-area {
+    position: absolute;
+    bottom: 20px;
+    width: 200px;
+}
+/* Quando colapsado, centraliza o ícone de sair também */
+#toggle-sidebar:checked + .layout .logout-area .menu-item {
+    justify-content: center;
+    padding: 15px 0;
+}
+
+/* Deixa o ícone de sair com uma cor de destaque sutil (vermelho suave) */
+.logout-area .menu-item:hover {
+    background: #452a2d; /* Um tom de vinho bem escuro */
+    color: #f87171;
+}
+/* =========================
+   MAIN & TOPBAR
+========================= */
+.main {
+    flex: 1;
+    min-width: 0;
+}
+
+.topbar {
+    background: white;
+    padding: 15px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.toggle-btn {
+    cursor: pointer;
+    font-size: 20px;
+}
+
+.user-info {
+    text-align: right;
+    font-size: 14px;
+}
+
+/* =========================
+   CONTENT & PANELS
+========================= */
+.content {
+    padding: 20px;
+}
+
+h1 { margin: 0 0 5px 0; }
+.subtitle { color: #6b7280; margin-bottom: 20px; }
+
+.panel {
+    background: white;
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+}
+
+.panel-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 15px;
+    gap: 10px;
+}
+
+.search {
+    padding: 10px;
+    width: 250px;
+    border-radius: 8px;
+    border: 1px solid #ccc;
+}
+
+/* =========================
+   BOTÕES
+========================= */
+.btn {
+    background: #4f46e5;
+    color: white;
+    border: none;
+    padding: 10px 15px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 500;
+}
+
+.btn:hover { background: #4338ca; }
+
+.btn-light {
+    background: #e5e7eb;
+    border: none;
+    padding: 10px 15px;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.btn-light:hover { background: #d1d5db; }
+
+.btn-dark {
+    background: #1d6932;
+    color: #f3f30a;
+    border: none;
+    padding: 10px 15px;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.btn-danger {
+    background: #ef4444;
+    color: white;
+    border: none;
+    padding: 10px 15px;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+/* =========================
+   TABELA
+========================= */
+.tabela {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.tabela th, .tabela td {
+    padding: 12px 10px;
+    text-align: left;
+    border-bottom: 1px solid #eee;
+    font-size: 14px;
+}
+
+.tabela tr:hover { background: #f9fafb; }
+
+.acoes { display: flex; gap: 5px; }
+.acoes button {
+    border: none;
+    background: #e5e7eb;
+    padding: 6px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+/* =========================
+   MODAL (CORRIGIDO)
+========================= */
+.modal {
+    display: none; 
+    position: fixed;
+    z-index: 2000;
+    left: 0; top: 0;
+    width: 100%; height: 100%;
+    background-color: rgba(0,0,0,0.6);
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-box {
+    background: #d1f4f5; /* Sua cor personalizada */
+    width: 650px;
+    max-width: 95%;
+    max-height: 90vh; /* 🔥 Altura máxima de 90% da tela */
+    border-radius: 12px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+    display: flex;
+    flex-direction: column; /* Organiza Topo -> Meio -> Fundo */
+    position: relative;
+    overflow: hidden;
+}
+
+.modal-header {
+    padding: 20px 25px;
+    border-bottom: 1px solid rgba(0,0,0,0.1);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-shrink: 0; /* Header nunca encolhe */
+}
+
+.form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+    padding: 20px 25px;
+    overflow-y: auto; /* 🔥 ATIVA A ROLAGEM INTERNA */
+    flex: 1; /* Ocupa o espaço central */
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+}
+
+.form-group.full {
+    grid-column: span 2;
+}
+
+.form-group input, .form-group select, .form-group textarea {
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid #ccc;
+    margin-top: 5px;
+}
+
+.form-actions {
+    padding: 15px 25px;
+    border-top: 1px solid rgba(0,0,0,0.1);
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    flex-shrink: 0; /* 🔥 Botões sempre visíveis no rodapé */
+}
+
+/* =========================
+   DASHBOARD CARDS
+========================= */
+.cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    margin-bottom: 25px;
+}
+
+.card {
+    background: white;
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+}
+
+.card-value {
+    font-size: 26px;
+    font-weight: bold;
+}
+
+/* =========================
+   AGENDA GRID
+========================= */
+.agenda-grid {
+    display: flex;
+    height: 720px;
+    background: white;
+    border-radius: 12px;
+    border: 1px solid #eee;
+    overflow: hidden;
+}
+
+.agenda-hours { width: 70px; border-right: 1px solid #eee; }
+
+.hour {
+    height: 80px; 
+    box-sizing: border-box; /* Importante para a borda não somar no tamanho */
+    border-bottom: 1px solid #f1f5f9;
+    /* ... resto do seu estilo ... */
+}
+
+.agenda-events { flex: 1; position: relative; overflow-y: auto; }
+
+.event {
+    position: absolute;
+    /* Remova o left: 10px e right: 10px se estiverem lá */
+    left: 5%; 
+    width: 90%; 
+    background: #ffffff;
+    /* ... resto do seu código ... */
+    transition: all 0.2s ease, width 0.3s ease, left 0.3s ease; /* Suaviza a organização */
+}
+/* =========================
+   UTILITÁRIOS
+========================= */
+.perfil-badge {
+    background: #e0e7ff;
+    color: #3730a3;
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.flash-container { position: fixed; top: 20px; right: 20px; z-index: 3000; }
+.flash { padding: 12px 20px; border-radius: 8px; color: white; margin-bottom: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+.flash.success { background: #22c55e; }
+.flash.error { background: #ef4444; }
+
+/* Scrollbar Elegante */
+.form-grid::-webkit-scrollbar { width: 6px; }
+.form-grid::-webkit-scrollbar-thumb { background: #4f46e5; border-radius: 10px; }
+.form-grid::-webkit-scrollbar-track { background: rgba(0,0,0,0.05); }
+
+/* =========================
+   FILTROS AGENDA PREMIUM (REESTILIZADO)
+========================= */
+
+.agenda-filtros-top {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: white;
+    padding: 15px;
+    border-radius: 12px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    flex-wrap: wrap;
+}
+
+/* BOTÃO HOJE */
+.btn-hoje {
+    background: #ffffff;
+    border: 1px solid #dadce0;
+    color: #3c4043;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 500;
+    font-size: 14px;
+    transition: background 0.2s;
+}
+
+.btn-hoje:hover {
+    background: #f1f3f4;
+}
+
+/* SETAS DE NAVEGAÇÃO */
+.nav-arrows button {
+    background: transparent;
+    border: none;
+    color: #5f6368;
+    padding: 8px;
+    border-radius: 50%; /* Deixa redondo igual ao Google */
+    cursor: pointer;
+    font-size: 16px;
+    transition: background 0.2s;
+}
+
+.nav-arrows button:hover {
+    background: #f1f3f4;
+}
+
+/* INPUT DATA E SELECT */
+.input-date, .select-unidade {
+    padding: 8px 12px;
+    border-radius: 4px;
+    border: 1px solid #dadce0;
+    font-size: 14px;
+    color: #3c4043;
+    outline: none;
+}
+
+.input-date:focus, .select-unidade:focus {
+    border: 2px solid #4f46e5;
+    padding: 7px 11px; /* Compensa a borda de 2px */
+}
+
+/* BOTÃO FILTRAR (O DESTAQUE) */
+.btn-filtrar {
+    background: #4f46e5;
+    color: white;
+    border: none;
+    padding: 9px 18px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.3s;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+.btn-filtrar:hover {
+    background: #4338ca;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.15);
+    transform: translateY(-1px);
+}    
+
+.status-badge {
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+.status-ok { background: #dcfce7; color: #15803d; }
+.status-pending { background: #fef9c3; color: #a16207; }

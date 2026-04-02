@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>BMS Sistema</title>
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="https://unpkg.com/lucide@latest"></script>    
+</head>
+
+{% block scripts %}{% endblock %}
+<body>
+
+<!-- CHECKBOX SIDEBAR -->
+<input type="checkbox" id="toggle-sidebar">
+
+<div class="layout">
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+
+        <!-- LOGO -->
+        <div class="logo">
+            <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Logo">
+            <span class="logo-text">BMS Sistema</span>
+        </div>
+
+        <!-- MENU -->
+        <nav class="menu">
+            <a href="/dashboard" class="menu-item">
+                <i data-lucide="layout-dashboard"></i>
+                <span class="text">Dashboard</span>
+            </a>
+
+            <a href="/usuarios" class="menu-item">
+                <i data-lucide="users"></i>
+                <span class="text">Usuários</span>
+            </a>
+
+            <a href="/agendamento" class="menu-item">
+                <i data-lucide="calendar"></i>
+                <span class="text">Agendamento</span>
+            </a>
+
+            <a href="/agenda" class="menu-item">
+                <i data-lucide="calendar-days"></i>
+                <span class="text">Agenda</span>
+            </a>
+        </nav>
+
+        <!-- LOGOUT -->
+        <div class="logout-area">
+            <a href="/logout" class="menu-item">🚪 <span class="text">Sair</span></a>
+        </div>
+
+    </aside>
+
+    <!-- MAIN -->
+    <div class="main">
+
+        <!-- TOPBAR -->
+        <header class="topbar">
+
+            <!-- BOTÃO SIDEBAR -->
+            <label for="toggle-sidebar" class="toggle-btn">☰</label>
+
+            <!-- USER -->
+            <div class="user-info">
+                <strong>{{ session['usuario_nome'] }}</strong><br>
+                <small>{{ session['usuario_email'] }}</small>
+            </div>
+
+        </header>
+
+        <!-- MENSAGENS -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <div class="flash-container">
+                {% for category, message in messages %}
+                    <div class="flash {{ category }}">{{ message }}</div>
+                {% endfor %}
+            </div>
+        {% endif %}
+        {% endwith %}
+
+        <!-- CONTEÚDO -->
+        <div class="content">
+            {% block content %}{% endblock %}
+        </div>
+
+    </div>
+
+</div>
+
+<!-- JS GLOBAL -->
+<script>
+
+function abrirModal() {
+    document.getElementById("modal").style.display = "flex";
+}
+
+function fecharModal() {
+    document.getElementById("modal").style.display = "none";
+}
+
+/* =========================
+   NOVO AGENDAMENTO
+========================= */
+function novoAgendamento() {
+
+    abrirModal();
+
+    // limpa form
+    document.getElementById("id").value = "";
+
+    document.querySelectorAll(".form-grid input, .form-grid textarea").forEach(el => {
+        if (el.type !== "hidden") el.value = "";
+    });
+
+    // 🔥 altera título
+    document.getElementById("modal-title").innerText = "Novo Agendamento";
+
+    // 🔥 altera botão
+    document.getElementById("btn-submit").innerText = "Incluir";
+}
+
+/* =========================
+   EDITAR AGENDAMENTO
+========================= */
+function editarAgendamento(btn) {
+
+    abrirModal();
+
+    document.getElementById("id").value = btn.dataset.id;
+
+    document.querySelector('[name="unidades_id"]').value = btn.dataset.unidade;
+    document.querySelector('[name="data"]').value = btn.dataset.data;
+    document.querySelector('[name="hora"]').value = btn.dataset.hora;
+    document.querySelector('[name="nome"]').value = btn.dataset.nome;
+    document.querySelector('[name="telefone"]').value = btn.dataset.telefone;
+    document.querySelector('[name="responsavel"]').value = btn.dataset.responsavel;
+    document.querySelector('[name="codigo"]').value = btn.dataset.codigo;
+
+    document.querySelector('[name="idade"]').value = btn.dataset.idade || "";
+    document.querySelector('[name="observacao"]').value = btn.dataset.observacao || "";
+
+    // 🔥 altera título
+    document.getElementById("modal-title").innerText = "Edição de Agendamento";
+
+    // 🔥 altera botão
+    document.getElementById("btn-submit").innerText = "Salvar Alterações";
+}
+
+</script>
+
+<script>
+function excluirAgendamento(id) {
+
+    if (confirm("Tem certeza que deseja excluir este agendamento?")) {
+        window.location.href = "/agendamento/deletar/" + id;
+    }
+
+}
+</script>
+
+<script>
+
+let deleteId = null;
+
+function abrirDelete(id) {
+    deleteId = id;
+    document.getElementById("modal-delete").style.display = "flex";
+}
+
+function fecharDelete() {
+    document.getElementById("modal-delete").style.display = "none";
+    deleteId = null;
+}
+
+document.addEventListener("DOMContentLoaded", function() {
+
+    const btn = document.getElementById("confirm-delete");
+
+    if (btn) {
+        btn.addEventListener("click", function() {
+            if (deleteId) {
+                window.location.href = "/agendamento/deletar/" + deleteId;
+            }
+        });
+    }
+
+});
+
+</script>   
+
+<script>
+    lucide.createIcons();
+</script>
+
+</body>
+</html>

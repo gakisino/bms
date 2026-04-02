@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="utf-8">
+    <title>Painel de Estratégias</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+</head>
+<body>
+
+    <h1 class="titulo">Painel de Análise de Estratégias</h1>
+
+    <div class="layout">
+
+        <div class="formulario">
+
+            <form method="POST" action="/">
+
+                <div class="linha">
+                    <div>
+                        <label>Data Inicial</label>
+                        <input type="date" name="data_inicio">
+                    </div>
+
+                    <div>
+                        <label>Data Final</label>
+                        <input type="date" name="data_fim">
+                    </div>
+                </div>
+
+                <label class="label-periodos">Períodos</label>
+
+                <div class="periodos">
+                    <label><input type="checkbox" name="periodo" value="10"> 10</label>
+                    <label><input type="checkbox" name="periodo" value="12"> 12</label>
+                    <label><input type="checkbox" name="periodo" value="15"> 15</label>
+                    <label><input type="checkbox" name="periodo" value="17"> 17</label>
+                    <label><input type="checkbox" name="periodo" value="19"> 19</label>
+                    <label><input type="checkbox" name="periodo" value="22"> 22</label>
+                </div>
+
+                <div class="linha">
+                    <div>
+                        <label>Estratégia</label>
+                        <select name="estrategia">
+                            <option value="Gale">Gale</option>
+                            <option value="Soros">Soros</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label>Nível</label>
+                        <select name="nivel">
+                            <option value="1">1</option>
+                            <option value="2">2</option>
+                            <option value="3">3</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label>Stop Loss</label>
+                        <input type="number" name="stop_loss" min="0" max="100">
+                    </div>
+
+                    <div>
+                        <label>Stop Win</label>
+                        <input type="number" name="stop_win" min="0" max="100">
+                    </div>
+                </div>
+
+                <div class="botoes">
+                    <button type="submit" class="btn-processar">
+                        <i class="fa-solid fa-gear"></i> Processar
+                    </button>
+
+                    <button type="submit" formaction="/exportar" formmethod="POST" class="btn-xls">
+                        <i class="fa-solid fa-file-excel"></i> Exportar XLS
+                    </button>
+                </div>
+
+                <div class="botoes botoes-analise">
+                    <button type="submit" formaction="/melhor_estrategia" formmethod="POST" class="btn-analise">
+                        <i class="fa-solid fa-trophy"></i> Melhor Estratégia
+                    </button>
+
+                    <button type="submit" formaction="/melhores_horarios" formmethod="POST" class="btn-analise">
+                        <i class="fa-solid fa-clock"></i> Melhores Horários
+                    </button>
+
+                    <button type="submit" formaction="/score_estrategias" formmethod="POST" class="btn-analise">
+                        <i class="fa-solid fa-chart-line"></i> Score Estratégias
+                    </button>
+
+                    <button type="submit" formaction="/analise_automatica" formmethod="POST" class="btn-analise">
+                        <i class="fa-solid fa-robot"></i> Análise Automática
+                    </button>
+
+                    <button type="submit" formaction="/combinacao_horarios" formmethod="POST" class="btn-analise">
+                        <i class="fa-solid fa-layer-group"></i> Combinação Horários
+                    </button>
+                </div>
+
+            </form>
+
+        </div>
+
+        <div class="resumo">
+            <p><strong>{{ resumo.periodo_texto }}</strong></p>
+            <p><strong>Horários:</strong> {{ resumo.horarios_texto }}</p>
+            <p><strong>Estratégia:</strong> {{ resumo.estrategia }}</p>
+            <p><strong>Nível:</strong> {{ resumo.nivel }}</p>
+            <p><strong>Lucro do período:</strong> {{ resumo.lucro_periodo }}</p>
+            <p><strong>Total de operações:</strong> {{ resumo.total_operacoes }}</p>
+            <hr>
+            <p><strong>Wins:</strong> {{ resumo.wins }}</p>
+            <p><strong>Loss:</strong> {{ resumo.loss }}</p>
+            <p><strong>Winrate:</strong> {{ resumo.winrate }}%</p>
+            <p><strong>Drawdown:</strong> {{ resumo.drawdown }}</p>
+        </div>
+
+    </div>
+
+    <table>
+        <tr>
+            <th>Data</th>
+            <th>Período</th>
+            <th>Operação</th>
+            <th>Nível</th>
+            <th>Lance</th>
+            <th>Payout</th>
+            <th>Resultado</th>
+            <th>Lucro</th>
+            <th>Saldo</th>
+        </tr>
+
+        {% for r in historico %}
+        <tr>
+            <td>{{ r.data }}</td>
+            <td>{{ r.periodo }}</td>
+            <td>{{ r.operacao }}</td>
+            <td>{{ r.nivel }}</td>
+            <td>{{ r.lance }}</td>
+            <td>{{ r.payout }}</td>
+
+            {% if r.resultado == "Win" %}
+                <td class="win">WIN</td>
+            {% elif r.resultado == "Loss" %}
+                <td class="loss">LOSS</td>
+            {% else %}
+                <td class="skip">SKIP</td>
+            {% endif %}
+
+            <td>{{ r.lucro }}</td>
+            <td>{{ r.saldo }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+
+    {% if mensagem %}
+    <div class="mensagem-info">
+        {{ mensagem }}
+    </div>
+    {% endif %}
+
+    {% if ranking %}
+    <h2 style="margin-top:40px;">Ranking de Estratégias</h2>
+
+    <table>
+        <tr>
+            <th>Horário</th>
+            <th>Estratégia</th>
+            <th>Nível</th>
+            <th>Lucro</th>
+            <th>Drawdown</th>
+            <th>Score</th>
+        </tr>
+
+        {% for r in ranking %}
+        <tr>
+            <td>{{ r.horario }}</td>
+            <td>{{ r.estrategia }}</td>
+            <td>{{ r.nivel }}</td>
+            <td>{{ r.lucro }}</td>
+            <td>{{ r.drawdown }}</td>
+            <td>{{ r.score }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+    {% endif %}
+
+</body>
+</html>

@@ -1,0 +1,27 @@
+# Ambientes Virtuais (NUNCA envie a pasta venv para o GitHub)
+venv/
+ENV/
+env/
+.venv/
+
+# Arquivos de Cache do Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Arquivos de Configuração Sensíveis (Senhas e Chaves de API)
+.env
+instance/
+.pytest_cache/
+
+# Arquivos do Windows (Lixo do sistema)
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Arquivos do VS Code ou PyCharm
+.vscode/
+.idea/
+
+# SQLite (Se você usa banco local apenas para teste)
+*.sqlite3

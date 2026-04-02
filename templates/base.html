@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BMS Sistema</title>
+    
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <style>
+        :root {
+            --sidebar-width: 260px;
+            --sidebar-collapsed: 80px;
+            --bg-sidebar: #1e293b;
+            --bg-main: #f8fafc;
+            --transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Inter', sans-serif; background: var(--bg-main); overflow-x: hidden; }
+
+        .layout { display: flex; width: 100%; }
+
+        .sidebar {
+            width: var(--sidebar-width);
+            background: var(--bg-sidebar);
+            color: white;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            position: fixed;
+            left: 0;
+            top: 0;
+            transition: width var(--transition);
+            z-index: 1000;
+            overflow-x: hidden;
+        }
+
+        .main {
+            flex: 1;
+            margin-left: var(--sidebar-width);
+            transition: margin-left var(--transition);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #toggle-sidebar:checked + .layout .sidebar { width: var(--sidebar-collapsed); }
+        #toggle-sidebar:checked + .layout .main { margin-left: var(--sidebar-collapsed); }
+        #toggle-sidebar:checked + .layout .logo-text,
+        #toggle-sidebar:checked + .layout .menu-text { display: none; }
+
+        .logo { padding: 20px; display: flex; align-items: center; gap: 12px; height: 70px; flex-shrink: 0; }
+        .logo img { width: 35px; min-width: 35px; }
+
+        .menu { flex: 1; padding-top: 20px; overflow-y: auto; }
+
+        .menu-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 25px;
+            color: #cbd5e1;
+            text-decoration: none;
+            gap: 15px;
+            transition: 0.2s;
+            white-space: nowrap;
+        }
+        .menu-item:hover { background: #334155; color: white; }
+
+        .logout-area { border-top: 1px solid #334155; padding: 10px 0; }
+        .btn-sair { color: #fb7185 !important; }
+
+        .topbar {
+            background: white;
+            height: 70px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 30px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .toggle-btn { font-size: 24px; cursor: pointer; color: #64748b; }
+        .content { padding: 25px; flex: 1; }
+
+        /* Estilos Globais para Forms */
+        .label-form { display: block; font-size: 11px; font-weight: bold; color: #64748b; margin-bottom: 5px; text-transform: uppercase; }
+        .input-form { width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px; outline: none; }
+        .input-form:focus { border-color: #4f46e5; }
+    </style>
+</head>
+<body>
+
+<input type="checkbox" id="toggle-sidebar" style="display: none;">
+
+<div class="layout">
+    <aside class="sidebar">
+        <div class="logo">
+            <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Logo">
+            <span class="logo-text" style="font-weight: bold;">BMS Sistema</span>
+        </div>
+
+        <nav class="menu">
+            <a href="/dashboard"   class="menu-item"><i data-lucide="layout-dashboard"></i> <span class="menu-text">Dashboard</span></a>
+            <a href="/usuarios"    class="menu-item"><i data-lucide="users"></i> <span class="menu-text">Usuários</span></a>
+            <a href="/operadores"  class="menu-item"><i data-lucide="user-cog"></i> <span class="menu-text">Operadores</span></a>
+            <a href="/agendamento" class="menu-item"><i data-lucide="calendar"></i> <span class="menu-text">Agendamento</span></a>
+            <a href="/agenda"      class="menu-item"><i data-lucide="calendar-days"></i> <span class="menu-text">Agenda</span></a>
+        </nav>
+
+        <div class="logout-area">
+            <a href="/logout" class="menu-item btn-sair"><i data-lucide="log-out"></i> <span class="menu-text">Sair</span></a>
+        </div>
+    </aside>
+
+    <div class="main">
+        <header class="topbar">
+            <label for="toggle-sidebar" class="toggle-btn">☰</label>
+            <div class="user-info" style="text-align: right;">
+                <strong>{{ session['usuario_nome'] }}</strong><br>
+                <small style="color: #64748b;">{{ session['usuario_email'] }}</small>
+            </div>
+        </header>
+        <div class="content">
+            {% block content %}{% endblock %}
+        </div>
+    </div>
+</div>
+
+<div id="modalConfirmacaoGlobal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 10000; align-items: center; justify-content: center; backdrop-filter: blur(4px);">
+    <div style="background: white; width: 90%; max-width: 400px; border-radius: 16px; padding: 30px; text-align: center;">
+        <div style="background: #fee2e2; width: 60px; height: 60px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px;">
+            <i data-lucide="alert-triangle" style="color: #ef4444; width: 30px;"></i>
+        </div>
+        <h3 id="tituloConfirmacao" style="margin-bottom: 10px; color: #1e293b;">Confirmar Exclusão</h3>
+        <p id="mensagemConfirmacao" style="color: #64748b; margin-bottom: 25px; line-height: 1.5;"></p>
+        <div style="display: flex; gap: 10px;">
+            <button onclick="fecharConfirmacaoGlobal()" style="flex: 1; padding: 12px; border-radius: 10px; border: 1px solid #ddd; background: white; cursor: pointer;">Cancelar</button>
+            <a id="linkConfirmacaoGlobal" href="#" style="flex: 1; padding: 12px; border-radius: 10px; background: #ef4444; color: white; text-decoration: none; font-weight: bold; display: flex; align-items: center; justify-content: center;">Excluir</a>
+        </div>
+    </div>
+</div>
+
+<script>
+    // FUNÇÕES GLOBAIS (FORA DO DOMCONTENTLOADED)
+    function abrirConfirmacaoGlobal(url, titulo, mensagem) {
+        // 1. Localiza os elementos
+        const modal = document.getElementById('modalConfirmacaoGlobal');
+        const link = document.getElementById('linkConfirmacaoGlobal');
+        
+        // 2. Alimenta os textos
+        document.getElementById('tituloConfirmacao').innerText = titulo;
+        document.getElementById('mensagemConfirmacao').innerHTML = mensagem;
+        
+        // 3. Injeta a URL e garante que o clique execute o redirecionamento
+        link.href = url;
+        
+        // 4. Exibe o modal
+        modal.style.display = 'flex';
+    }
+    
+    function fecharConfirmacaoGlobal() {
+        document.getElementById('modalConfirmacaoGlobal').style.display = 'none';
+    }
+
+    document.addEventListener("DOMContentLoaded", function() {
+        lucide.createIcons();
+        const checkbox = document.getElementById('toggle-sidebar');
+        const savedState = localStorage.getItem('sidebar-collapsed');
+        if (savedState === 'true') checkbox.checked = true;
+        checkbox.addEventListener('change', function() {
+            localStorage.setItem('sidebar-collapsed', this.checked);
+        });
+    });
+
+    // Fechar modais ao clicar fora
+    window.onclick = function(event) {
+        const modalG = document.getElementById('modalConfirmacaoGlobal');
+        if (event.target == modalG) fecharConfirmacaoGlobal();
+    }
+</script>
+</body>
+</html>

@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="usuarios-page" style="padding: 20px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px;">
+        <h1 style="color: #1e293b; font-weight: 700;">👥 Gestão de Usuários</h1>
+        <button onclick="window.novoUsuario()" style="background: #4f46e5; color: white; border: none; padding: 12px 20px; border-radius: 10px; cursor: pointer; font-weight: bold; transition: 0.2s;">
+            + Novo Usuário
+        </button>
+    </div>
+
+    <div style="background: white; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); overflow: hidden; border: 1px solid #f1f5f9;">
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead style="background: #f8fafc; border-bottom: 2px solid #f1f5f9;">
+                <tr>
+                    <th style="padding: 15px; text-align: left; color: #64748b; font-size: 11px; text-transform: uppercase;">ID</th>
+                    <th style="padding: 15px; text-align: left; color: #64748b; font-size: 11px; text-transform: uppercase;">Nome</th>
+                    <th style="padding: 15px; text-align: left; color: #64748b; font-size: 11px; text-transform: uppercase;">Telefone/WhatsApp</th>
+                    <th style="padding: 15px; text-align: left; color: #64748b; font-size: 11px; text-transform: uppercase;">Email</th>
+                    <th style="padding: 15px; text-align: left; color: #64748b; font-size: 11px; text-transform: uppercase;">Perfil</th>
+                    <th style="padding: 15px; text-align: center; color: #64748b; font-size: 11px; text-transform: uppercase;">Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for u in usuarios %}
+                <tr style="border-bottom: 1px solid #f1f5f9; transition: 0.2s;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='white'">
+                    <td style="padding: 15px; color: #94a3b8;">{{ u.id }}</td>
+                    <td style="padding: 15px; font-weight: 600; color: #1e293b;">{{ u.nome }}</td>
+                    <td style="padding: 15px;">
+                        {% if u.telefone %}
+                            <span style="font-family: monospace;">({{ u.telefone[0:2] }}) {{ u.telefone[2:7] }}-{{ u.telefone[7:11] }}</span>
+                            <a href="https://api.whatsapp.com/send?phone=55{{ u.telefone }}" target="_blank" style="margin-left: 8px; text-decoration: none;">🟢</a>
+                        {% else %}
+                            <span style="color: #cbd5e1; font-style: italic; font-size: 12px;">Não informado</span>
+                        {% endif %}
+                    </td>
+                    <td style="padding: 15px; color: #64748b;">{{ u.email }}</td>
+                    <td style="padding: 15px;">
+                        <span style="background:#e0e7ff; color:#4338ca; padding:4px 10px; border-radius:12px; font-size:11px; font-weight: bold;">
+                            {{ u.perfil_nome }}
+                        </span>
+                    </td>
+                    <td style="padding: 15px; text-align: center; display: flex; justify-content: center; gap: 15px;">
+                        <button type="button" 
+                            onclick="window.editarUsuarioLocal('{{ u.id }}', '{{ u.nome }}', '{{ u.email }}', '{{ u.telefone }}', '{{ u.id_perfil }}')" 
+                            style="background: none; border: none; cursor: pointer; color: #6366f1;">
+                            <i data-lucide="edit-3" style="width: 18px;"></i>
+                        </button>
+                        <button type="button" 
+                            onclick="abrirConfirmacaoGlobal('{{ url_for('deletar_usuario', id=u.id) }}', 'Excluir Usuário', 'Tem certeza que deseja remover <b>{{ u.nome }}</b>?')" 
+                            style="background: none; border: none; cursor: pointer; color: #ef4444;">
+                            <i data-lucide="trash-2" style="width: 18px;"></i>
+                        </button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div id="modalUsuario" style="display:none; position:fixed; inset:0; background:rgba(15, 23, 42, 0.7); z-index:9999; align-items:center; justify-content:center; backdrop-filter: blur(4px);"> 
+    <div style="background:white; width:95%; max-width:450px; border-radius:20px; padding:30px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);">
+        <h2 id="modal-title-user" style="color: #1e293b; font-weight: 700; margin-bottom: 20px;">Usuário</h2>
+        
+        <form id="formUsuario" action="/usuarios/salvar" method="POST">
+            <input type="hidden" name="id" id="user_id">
+            
+            <div style="margin-bottom: 15px;">
+                <label class="label-form">Nome Completo</label>
+                <input type="text" name="nome" id="user_nome" required class="input-form">
+            </div>
+
+            <div style="margin-bottom: 15px;">
+                <label class="label-form">Email</label>
+                <input type="email" name="email" id="user_email" required class="input-form">
+            </div>
+
+            <div style="display: flex; gap: 15px; margin-bottom: 15px;">
+                <div style="flex: 1;">
+                    <label class="label-form">Telefone (só números)</label>
+                    <input type="text" name="telefone" id="user_telefone" placeholder="11999999999" maxlength="11" class="input-form">
+                </div>
+                <div style="flex: 1;">
+                    <label class="label-form">Perfil</label>
+                    <select name="id_perfil" id="user_perfil" required class="input-form">
+                        {% for p in perfis %}
+                        <option value="{{ p.id }}">{{ p.nome }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div style="margin-bottom: 20px;">
+                <label class="label-form">Senha</label>
+                <input type="password" name="senha" id="user_senha" placeholder="Deixe em branco para manter" class="input-form">
+            </div>
+
+            <div style="display:flex; gap:10px;">
+                <button type="button" onclick="document.getElementById('modalUsuario').style.display='none'" style="flex:1; padding:12px; border-radius:10px; border:1px solid #e2e8f0; background:white; color:#64748b; font-weight:600; cursor:pointer;">Cancelar</button>
+                <button type="submit" style="flex:1; padding:12px; border-radius:10px; background:#4f46e5; color:white; border:none; font-weight:700; cursor:pointer;">Gravar Dados</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    // DECLARAÇÃO GLOBAL PARA EVITAR ERROS DE ESCOPO
+    window.novoUsuario = function() {
+        const modal = document.getElementById("modalUsuario");
+        document.getElementById("modal-title-user").innerText = "Novo Usuário";
+        document.getElementById("user_id").value = "";
+        
+        const form = document.getElementById("formUsuario");
+        if (form) form.reset();
+
+        modal.style.display = "flex";
+    };
+
+    window.editarUsuarioLocal = function(id, nome, email, telefone, perfil) {
+        document.getElementById("modal-title-user").innerText = "Editar Usuário";
+        document.getElementById("user_id").value = id;
+        document.getElementById("user_nome").value = (nome !== 'None') ? nome : '';
+        document.getElementById("user_email").value = (email !== 'None') ? email : '';
+        document.getElementById("user_telefone").value = (telefone !== 'None') ? telefone : ''; 
+        document.getElementById("user_perfil").value = perfil;
+        document.getElementById("user_senha").value = ""; 
+        
+        document.getElementById("modalUsuario").style.display = "flex";
+    };
+
+    // INICIALIZAÇÃO DE ÍCONES
+    document.addEventListener("DOMContentLoaded", function() {
+        if (typeof lucide !== 'undefined') {
+            lucide.createIcons();
+        }
+    });
+
+    // FECHAR MODAL AO CLICAR FORA
+    window.onclick = function(event) {
+        const modalUser = document.getElementById('modalUsuario');
+        const modalConfirm = document.getElementById('modalConfirmacaoGlobal');
+        if (event.target == modalUser) modalUser.style.display = 'none';
+        if (event.target == modalConfirm && typeof fecharConfirmacaoGlobal === 'function') fecharConfirmacaoGlobal();
+    };
+</script>
+{% endblock %}
