@@ -40,7 +40,13 @@ def login():
 
         # 🔴 SENHA ERRADA
         if not check_password_hash(usuario['senha'], senha):
-            return render_template('login.html', erro="Senha incorreta")        
+            return render_template('login.html', erro="Senha incorreta")
+
+        # 🔴 USUÁRIO INATIVO OU BLOQUEADO
+        if usuario['ativo'] == 'I':
+            return render_template('login.html', erro="Usuário inativo. Entre em contato com o administrador.")
+        if usuario['ativo'] == 'B':
+            return render_template('login.html', erro="Usuário bloqueado. Entre em contato com o administrador.")
 
         # 🔥 validação simples (com hash por enquanto)
         if usuario and check_password_hash(usuario['senha'], senha):
