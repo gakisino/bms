@@ -3,8 +3,6 @@ from flask import Flask, render_template, request, redirect, url_for, session, f
 from werkzeug.security import check_password_hash, generate_password_hash
 from datetime import date
 import mysql.connector
-
-
 app = Flask(__name__)
 app.secret_key = "segredo_super_secreto"
 
@@ -42,11 +40,9 @@ def login():
         if not check_password_hash(usuario['senha'], senha):
             return render_template('login.html', erro="Senha incorreta")
 
-        # 🔴 USUÁRIO INATIVO OU BLOQUEADO
-        if usuario['ativo'] == 'I':
-            return render_template('login.html', erro="Usuário inativo. Entre em contato com o administrador.")
-        if usuario['ativo'] == 'B':
-            return render_template('login.html', erro="Usuário bloqueado. Entre em contato com o administrador.")
+        # 🔴 USUÁRIO NÃO AUTORIZADO
+        if usuario['ativo'] != 'A':
+            return render_template('login.html', erro="Usuário não autorizado. Entre em contato com o administrador.")
 
         # 🔥 validação simples (com hash por enquanto)
         if usuario and check_password_hash(usuario['senha'], senha):
@@ -217,9 +213,8 @@ def usuarios():
     conn = get_db()
     cursor = conn.cursor(dictionary=True)
 
-    # Adicionado u.telefone aqui
     cursor.execute("""
-        SELECT u.id, u.nome, u.email, u.telefone, u.id_perfil, p.nome AS perfil_nome
+        SELECT u.id, u.nome, u.email, u.telefone, u.id_perfil, u.ativo, p.nome AS perfil_nome
         FROM usuarios u
         LEFT JOIN perfil p ON p.id = u.id_perfil
         ORDER BY u.nome
@@ -306,46 +301,70 @@ def salvar_usuario():
     if not protegido():
         return redirect('/')
 
-    # Pega dados do form
     id_usuario = request.form.get('id')
     nome = request.form['nome']
     email = request.form['email']
     senha_plana = request.form.get('senha')
     id_perfil = request.form['id_perfil']
-    
-    # --- AQUI ESTÁ O SEGREDO PARA O WHATSAPP ---
-    # Pega o telefone "(11) 96960-6960" e transforma em "11969606960"
+    ativo = request.form.get('ativo', 'A')
     tel_raw = request.form.get('telefone', '')
-    telefone_limpo = re.sub(r'\D', '', tel_raw) 
+    telefone_limpo = re.sub(r'\D', '', tel_raw)
 
     conn = get_db()
     cursor = conn.cursor()
 
     try:
         if id_usuario:  # --- MODO EDIÇÃO ---
-            if senha_plana: # Se informou nova senha
-                hash_nova = generate_password_hash(senha_plana)
-                cursor.execute("""
-                    UPDATE usuarios SET nome=%s, email=%s, telefone=%s, senha=%s, id_perfil=%s WHERE id=%s
-                """, (nome, email, telefone_limpo, hash_nova, id_perfil, id_usuario))
-            else: # Mantém a senha atual, mas atualiza o telefone
-                cursor.execute("""
-                    UPDATE usuarios SET nome=%s, email=%s, telefone=%s, id_perfil=%s WHERE id=%s
-                """, (nome, email, telefone_limpo, id_perfil, id_usuario))
+            cursor.execute("""
+                UPDATE usuarios SET nome=%s, email=%s, telefone=%s, id_perfil=%s, ativo=%s WHERE id=%s
+            """, (nome, email, telefone_limpo, id_perfil, ativo, id_usuario))
         else:  # --- MODO INCLUSÃO ---
             hash_senha = generate_password_hash(senha_plana)
             cursor.execute("""
-                INSERT INTO usuarios (nome, email, telefone, senha, id_perfil) VALUES (%s, %s, %s, %s, %s)
-            """, (nome, email, telefone_limpo, hash_senha, id_perfil))
-        
+                INSERT INTO usuarios (nome, email, telefone, senha, id_perfil, ativo) VALUES (%s, %s, %s, %s, %s, %s)
+            """, (nome, email, telefone_limpo, hash_senha, id_perfil, ativo))
+
         conn.commit()
     except Exception as e:
         print(f"Erro ao salvar: {e}")
+        return redirect('/usuarios?erro=salvar')
     finally:
         cursor.close()
         conn.close()
 
-    return redirect('/usuarios')
+    return redirect('/usuarios?ok=salvo')
+
+
+# 🔑 ALTERAR SENHA
+@app.route('/usuarios/alterar-senha', methods=['POST'])
+def alterar_senha():
+    if not protegido():
+        return redirect('/')
+
+    id_usuario = request.form.get('id')
+    senha_antiga = request.form.get('senha_antiga')
+    senha_nova = request.form.get('senha_nova')
+
+    conn = get_db()
+    cursor = conn.cursor(dictionary=True)
+
+    try:
+        cursor.execute("SELECT senha FROM usuarios WHERE id = %s", (id_usuario,))
+        usuario = cursor.fetchone()
+
+        if not usuario or not check_password_hash(usuario['senha'], senha_antiga):
+            return redirect('/usuarios?erro=senha_antiga')
+
+        hash_nova = generate_password_hash(senha_nova)
+        cursor.execute("UPDATE usuarios SET senha=%s WHERE id=%s", (hash_nova, id_usuario))
+        conn.commit()
+    except Exception as e:
+        print(f"Erro ao alterar senha: {e}")
+    finally:
+        cursor.close()
+        conn.close()
+
+    return redirect('/usuarios?ok=senha_alterada')
 
 # Deletar Usuario
 @app.route('/usuarios/deletar/<int:id>')
@@ -380,7 +399,6 @@ def operadores():
     busca = request.args.get('q', '')
 
     if request.method == 'POST':
-        # Coleta de dados conforme sua tabela
         dados = (
             request.form.get('nome'),
             request.form.get('codigo'),
@@ -393,28 +411,54 @@ def operadores():
             request.form.get('rg'),
             request.form.get('pix'),
             request.form.get('contato'),
-            request.form.get('telefone_contato')
+            request.form.get('telefone_contato'),
+            request.form.get('id_perfil') or None,
+            request.form.get('status', 'A')
         )
         try:
-            sql = """INSERT INTO operadores 
-                     (nome, codigo, telefone, nascimento, endereco, cidade, uf, cpf, rg, pix, contato, telefone_contato) 
-                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"""
+            sql = """INSERT INTO operadores
+                     (nome, codigo, telefone, nascimento, endereco, cidade, uf, cpf, rg, pix, contato, telefone_contato, id_perfil, status)
+                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"""
             cursor.execute(sql, dados)
             conn.commit()
         except Exception as e:
             print(f"Erro Insert: {e}")
+            conn.close()
+            return redirect(url_for('operadores') + '?erro=salvar')
         finally:
             conn.close()
-        return redirect(url_for('operadores'))
+        return redirect(url_for('operadores') + '?ok=salvo')
+
+    # Ordenação
+    colunas_validas = {'nome': 'o.nome', 'codigo': 'o.codigo', 'telefone': 'o.telefone',
+                       'perfil': 'p.nome', 'status': 'o.status'}
+    sort  = request.args.get('sort', 'nome')
+    order = request.args.get('order', 'asc')
+    if sort not in colunas_validas: sort = 'nome'
+    if order not in ('asc', 'desc'): order = 'asc'
+    order_sql = f"{colunas_validas[sort]} {order}"
 
     if busca:
-        cursor.execute("SELECT * FROM operadores WHERE nome LIKE %s OR codigo LIKE %s", (f'%{busca}%', f'%{busca}%'))
+        cursor.execute(f"""
+            SELECT o.*, p.nome AS perfil_nome FROM operadores o
+            LEFT JOIN perfil p ON p.id = o.id_perfil
+            WHERE o.nome LIKE %s OR o.codigo LIKE %s ORDER BY {order_sql}
+        """, (f'%{busca}%', f'%{busca}%'))
     else:
-        cursor.execute("SELECT * FROM operadores ORDER BY nome")
-    
+        cursor.execute(f"""
+            SELECT o.*, p.nome AS perfil_nome FROM operadores o
+            LEFT JOIN perfil p ON p.id = o.id_perfil
+            ORDER BY {order_sql}
+        """)
+
     lista = cursor.fetchall()
+
+    cursor.execute("SELECT id, nome FROM perfil ORDER BY nome")
+    perfis = cursor.fetchall()
+
     conn.close()
-    return render_template('operadores.html', operadores=lista, busca=busca)
+    return render_template('operadores.html', operadores=lista, perfis=perfis,
+                           busca=busca, sort=sort, order=order)
 
 @app.route('/operadores/editar/<int:id>', methods=['POST'])
 def editar_operador(id):
@@ -425,16 +469,21 @@ def editar_operador(id):
         request.form.get('nascimento') or None, request.form.get('endereco'),
         request.form.get('cidade'), request.form.get('uf'), request.form.get('cpf'),
         request.form.get('rg'), request.form.get('pix'), request.form.get('contato'),
-        request.form.get('telefone_contato'), id
+        request.form.get('telefone_contato'), request.form.get('id_perfil') or None,
+        request.form.get('status', 'A'), id
     )
     try:
-        sql = """UPDATE operadores SET nome=%s, codigo=%s, telefone=%s, nascimento=%s, endereco=%s, 
-                 cidade=%s, uf=%s, cpf=%s, rg=%s, pix=%s, contato=%s, telefone_contato=%s WHERE id=%s"""
+        sql = """UPDATE operadores SET nome=%s, codigo=%s, telefone=%s, nascimento=%s, endereco=%s,
+                 cidade=%s, uf=%s, cpf=%s, rg=%s, pix=%s, contato=%s, telefone_contato=%s,
+                 id_perfil=%s, status=%s WHERE id=%s"""
         cursor.execute(sql, dados)
         conn.commit()
+    except Exception as e:
+        print(f"Erro ao editar operador: {e}")
+        return redirect(url_for('operadores') + '?erro=salvar')
     finally:
         conn.close()
-    return redirect(url_for('operadores'))
+    return redirect(url_for('operadores') + '?ok=salvo')
 
 @app.route('/operadores/deletar/<int:id>')
 def deletar_operador(id):
@@ -447,6 +496,74 @@ def deletar_operador(id):
     finally:
         conn.close()
     return redirect(url_for('operadores'))
+
+# ************ PERFIL **************************************
+@app.route('/perfil')
+def perfil():
+    if not protegido():
+        return redirect('/')
+
+    conn = get_db()
+    cursor = conn.cursor(dictionary=True)
+
+    sort  = request.args.get('sort', 'nome')
+    order = request.args.get('order', 'asc')
+    if sort not in ('nome', 'nivel'): sort = 'nome'
+    if order not in ('asc', 'desc'): order = 'asc'
+
+    cursor.execute(f"SELECT * FROM perfil ORDER BY {sort} {order}")
+    perfis = cursor.fetchall()
+    conn.close()
+
+    return render_template('perfil.html', perfis=perfis, sort=sort, order=order)
+
+
+@app.route('/perfil/salvar', methods=['POST'])
+def salvar_perfil():
+    if not protegido():
+        return redirect('/')
+
+    id_perfil = request.form.get('id')
+    nome      = request.form.get('nome', '').strip()
+    nivel     = request.form.get('nivel') or None
+
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        if id_perfil:
+            cursor.execute("UPDATE perfil SET nome=%s, nivel=%s WHERE id=%s", (nome, nivel, id_perfil))
+        else:
+            cursor.execute("INSERT INTO perfil (nome, nivel) VALUES (%s, %s)", (nome, nivel))
+        conn.commit()
+    except Exception as e:
+        print(f"Erro ao salvar perfil: {e}")
+        return redirect('/perfil?erro=salvar')
+    finally:
+        cursor.close()
+        conn.close()
+
+    return redirect('/perfil?ok=salvo')
+
+
+@app.route('/perfil/deletar/<int:id>')
+def deletar_perfil(id):
+    if not protegido():
+        return redirect('/')
+
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("DELETE FROM perfil WHERE id = %s", (id,))
+        conn.commit()
+    except Exception as e:
+        print(f"Erro ao deletar perfil: {e}")
+        return redirect('/perfil?erro=deletar')
+    finally:
+        cursor.close()
+        conn.close()
+
+    return redirect('/perfil?ok=deletado')
+
 
 if __name__ == '__main__':
     app.run(debug=True)

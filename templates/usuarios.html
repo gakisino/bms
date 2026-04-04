@@ -4,10 +4,15 @@
 <div class="usuarios-page" style="padding: 20px;">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px;">
         <h1 style="color: #1e293b; font-weight: 700;">👥 Gestão de Usuários</h1>
-        <button onclick="window.novoUsuario()" style="background: #4f46e5; color: white; border: none; padding: 12px 20px; border-radius: 10px; cursor: pointer; font-weight: bold; transition: 0.2s;">
-            + Novo Usuário
+        <button onclick="window.novoUsuario()"
+            style="display:inline-flex; align-items:center; gap:8px; background: linear-gradient(135deg, #4f46e5, #7c3aed); color: white; border: none; padding: 11px 22px; border-radius: 12px; cursor: pointer; font-weight: 700; font-size: 14px; box-shadow: 0 4px 14px rgba(79,70,229,0.4); transition: transform 0.15s, box-shadow 0.15s;"
+            onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(79,70,229,0.5)'"
+            onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 14px rgba(79,70,229,0.4)'">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Novo Usuário
         </button>
     </div>
+
 
     <div style="background: white; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); overflow: hidden; border: 1px solid #f1f5f9;">
         <table style="width: 100%; border-collapse: collapse;">
@@ -18,6 +23,7 @@
                     <th style="padding: 15px; text-align: left; color: #64748b; font-size: 11px; text-transform: uppercase;">Telefone/WhatsApp</th>
                     <th style="padding: 15px; text-align: left; color: #64748b; font-size: 11px; text-transform: uppercase;">Email</th>
                     <th style="padding: 15px; text-align: left; color: #64748b; font-size: 11px; text-transform: uppercase;">Perfil</th>
+                    <th style="padding: 15px; text-align: center; color: #64748b; font-size: 11px; text-transform: uppercase;">Status</th>
                     <th style="padding: 15px; text-align: center; color: #64748b; font-size: 11px; text-transform: uppercase;">Ações</th>
                 </tr>
             </thead>
@@ -29,7 +35,11 @@
                     <td style="padding: 15px;">
                         {% if u.telefone %}
                             <span style="font-family: monospace;">({{ u.telefone[0:2] }}) {{ u.telefone[2:7] }}-{{ u.telefone[7:11] }}</span>
-                            <a href="https://api.whatsapp.com/send?phone=55{{ u.telefone }}" target="_blank" style="margin-left: 8px; text-decoration: none;">🟢</a>
+                            <a href="https://api.whatsapp.com/send?phone=55{{ u.telefone }}" target="_blank" style="margin-left: 8px; text-decoration: none; display:inline-flex; align-items:center;" title="Abrir WhatsApp">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="#25D366">
+                                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+                                </svg>
+                            </a>
                         {% else %}
                             <span style="color: #cbd5e1; font-style: italic; font-size: 12px;">Não informado</span>
                         {% endif %}
@@ -40,17 +50,38 @@
                             {{ u.perfil_nome }}
                         </span>
                     </td>
-                    <td style="padding: 15px; text-align: center; display: flex; justify-content: center; gap: 15px;">
-                        <button type="button" 
-                            onclick="window.editarUsuarioLocal('{{ u.id }}', '{{ u.nome }}', '{{ u.email }}', '{{ u.telefone }}', '{{ u.id_perfil }}')" 
-                            style="background: none; border: none; cursor: pointer; color: #6366f1;">
-                            <i data-lucide="edit-3" style="width: 18px;"></i>
-                        </button>
-                        <button type="button" 
-                            onclick="abrirConfirmacaoGlobal('{{ url_for('deletar_usuario', id=u.id) }}', 'Excluir Usuário', 'Tem certeza que deseja remover <b>{{ u.nome }}</b>?')" 
-                            style="background: none; border: none; cursor: pointer; color: #ef4444;">
-                            <i data-lucide="trash-2" style="width: 18px;"></i>
-                        </button>
+                    <td style="padding: 15px; text-align: center;">
+                        {% if u.ativo == 'A' %}
+                            <span style="background:#dcfce7; color:#166534; padding:4px 12px; border-radius:12px; font-size:11px; font-weight:bold;">Ativo</span>
+                        {% elif u.ativo == 'I' %}
+                            <span style="background:#fef9c3; color:#854d0e; padding:4px 12px; border-radius:12px; font-size:11px; font-weight:bold;">Inativo</span>
+                        {% elif u.ativo == 'B' %}
+                            <span style="background:#fee2e2; color:#991b1b; padding:4px 12px; border-radius:12px; font-size:11px; font-weight:bold;">Bloqueado</span>
+                        {% else %}
+                            <span style="background:#f1f5f9; color:#64748b; padding:4px 12px; border-radius:12px; font-size:11px; font-weight:bold;">{{ u.ativo }}</span>
+                        {% endif %}
+                    </td>
+                    <td style="padding: 15px; text-align: center;">
+                        <div style="display:flex; justify-content:center; gap:10px;">
+                            <button type="button"
+                                onclick="window.editarUsuarioLocal('{{ u.id }}', '{{ u.nome }}', '{{ u.email }}', '{{ u.telefone }}', '{{ u.id_perfil }}', '{{ u.ativo }}')"
+                                title="Editar"
+                                style="background: none; border: none; cursor: pointer; color: #6366f1;">
+                                <i data-lucide="edit-3" style="width: 18px;"></i>
+                            </button>
+                            <button type="button"
+                                onclick="window.abrirAlterarSenha('{{ u.id }}', '{{ u.nome }}')"
+                                title="Alterar Senha"
+                                style="background: none; border: none; cursor: pointer; color: #f59e0b;">
+                                <i data-lucide="key-round" style="width: 18px;"></i>
+                            </button>
+                            <button type="button"
+                                onclick="abrirConfirmacaoGlobal('{{ url_for('deletar_usuario', id=u.id) }}', 'Excluir Usuário', 'Tem certeza que deseja remover <b>{{ u.nome }}</b>?')"
+                                title="Excluir"
+                                style="background: none; border: none; cursor: pointer; color: #ef4444;">
+                                <i data-lucide="trash-2" style="width: 18px;"></i>
+                            </button>
+                        </div>
                     </td>
                 </tr>
                 {% endfor %}
@@ -59,13 +90,14 @@
     </div>
 </div>
 
-<div id="modalUsuario" style="display:none; position:fixed; inset:0; background:rgba(15, 23, 42, 0.7); z-index:9999; align-items:center; justify-content:center; backdrop-filter: blur(4px);"> 
+<!-- MODAL EDITAR / NOVO USUÁRIO -->
+<div id="modalUsuario" style="display:none; position:fixed; inset:0; background:rgba(15, 23, 42, 0.7); z-index:9999; align-items:center; justify-content:center; backdrop-filter: blur(4px);">
     <div style="background:white; width:95%; max-width:450px; border-radius:20px; padding:30px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);">
         <h2 id="modal-title-user" style="color: #1e293b; font-weight: 700; margin-bottom: 20px;">Usuário</h2>
-        
+
         <form id="formUsuario" action="/usuarios/salvar" method="POST">
             <input type="hidden" name="id" id="user_id">
-            
+
             <div style="margin-bottom: 15px;">
                 <label class="label-form">Nome Completo</label>
                 <input type="text" name="nome" id="user_nome" required class="input-form">
@@ -91,12 +123,30 @@
                 </div>
             </div>
 
-            <div style="margin-bottom: 20px;">
-                <label class="label-form">Senha</label>
-                <input type="password" name="senha" id="user_senha" placeholder="Deixe em branco para manter" class="input-form">
+            <div id="campo_ativo" style="margin-bottom: 15px; display: none;">
+                <label class="label-form">Status</label>
+                <select name="ativo" id="user_ativo" class="input-form">
+                    <option value="A">Ativo</option>
+                    <option value="I">Inativo</option>
+                    <option value="B">Bloqueado</option>
+                </select>
             </div>
 
-            <div style="display:flex; gap:10px;">
+            <div id="campos_senha_novo" style="display: none;">
+                <div style="margin-bottom: 15px;">
+                    <label class="label-form">Senha</label>
+                    <input type="password" name="senha" id="user_senha" class="input-form" oninput="verificarSenhaNovo()">
+                </div>
+                <div style="margin-bottom: 15px;">
+                    <label class="label-form">Confirmar Senha</label>
+                    <input type="password" id="user_senha_confirma" class="input-form" oninput="verificarSenhaNovo()">
+                </div>
+                <div id="erro-senha-novo" style="display:none; background:#fee2e2; color:#991b1b; padding:10px 14px; border-radius:8px; font-size:13px; font-weight:600; margin-bottom:12px;">
+                    As senhas não conferem.
+                </div>
+            </div>
+
+            <div style="display:flex; gap:10px; margin-top:10px;">
                 <button type="button" onclick="document.getElementById('modalUsuario').style.display='none'" style="flex:1; padding:12px; border-radius:10px; border:1px solid #e2e8f0; background:white; color:#64748b; font-weight:600; cursor:pointer;">Cancelar</button>
                 <button type="submit" style="flex:1; padding:12px; border-radius:10px; background:#4f46e5; color:white; border:none; font-weight:700; cursor:pointer;">Gravar Dados</button>
             </div>
@@ -104,43 +154,131 @@
     </div>
 </div>
 
+<!-- MODAL ALTERAR SENHA -->
+<div id="modalSenha" style="display:none; position:fixed; inset:0; background:rgba(15, 23, 42, 0.7); z-index:9999; align-items:center; justify-content:center; backdrop-filter: blur(4px);">
+    <div style="background:white; width:95%; max-width:400px; border-radius:20px; padding:30px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);">
+        <h2 style="color: #1e293b; font-weight: 700; margin-bottom: 5px;">🔑 Alterar Senha</h2>
+        <p id="modal-senha-nome" style="color:#64748b; font-size:13px; margin-bottom:20px;"></p>
+
+        <form id="formSenha" action="/usuarios/alterar-senha" method="POST" onsubmit="return validarSenhas()">
+            <input type="hidden" name="id" id="senha_user_id">
+
+            <div style="margin-bottom: 15px;">
+                <label class="label-form">Senha Atual</label>
+                <input type="password" name="senha_antiga" id="senha_antiga" required class="input-form">
+            </div>
+
+            <div style="margin-bottom: 15px;">
+                <label class="label-form">Nova Senha</label>
+                <input type="password" name="senha_nova" id="senha_nova" required class="input-form" oninput="verificarConfirmacao()">
+            </div>
+
+            <div style="margin-bottom: 15px;">
+                <label class="label-form">Confirme a Nova Senha</label>
+                <input type="password" id="senha_confirma" required class="input-form" oninput="verificarConfirmacao()">
+            </div>
+
+            <div id="erro-senha-modal" style="display:none; background:#fee2e2; color:#991b1b; padding:10px 14px; border-radius:8px; font-size:13px; font-weight:600; margin-bottom:12px;"></div>
+
+            <div style="display:flex; gap:10px;">
+                <button type="button" onclick="document.getElementById('modalSenha').style.display='none'" style="flex:1; padding:12px; border-radius:10px; border:1px solid #e2e8f0; background:white; color:#64748b; font-weight:600; cursor:pointer;">Cancelar</button>
+                <button type="submit" id="btn-alterar-senha" style="flex:1; padding:12px; border-radius:10px; background:#f59e0b; color:white; border:none; font-weight:700; cursor:pointer;">Alterar Senha</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script>
-    // DECLARAÇÃO GLOBAL PARA EVITAR ERROS DE ESCOPO
     window.novoUsuario = function() {
-        const modal = document.getElementById("modalUsuario");
         document.getElementById("modal-title-user").innerText = "Novo Usuário";
         document.getElementById("user_id").value = "";
-        
-        const form = document.getElementById("formUsuario");
-        if (form) form.reset();
-
-        modal.style.display = "flex";
+        document.getElementById("formUsuario").reset();
+        document.getElementById("campos_senha_novo").style.display = "block";
+        document.getElementById("campo_ativo").style.display = "none";
+        document.getElementById("erro-senha-novo").style.display = "none";
+        document.getElementById("modalUsuario").style.display = "flex";
     };
 
-    window.editarUsuarioLocal = function(id, nome, email, telefone, perfil) {
+    window.editarUsuarioLocal = function(id, nome, email, telefone, perfil, ativo) {
         document.getElementById("modal-title-user").innerText = "Editar Usuário";
         document.getElementById("user_id").value = id;
         document.getElementById("user_nome").value = (nome !== 'None') ? nome : '';
         document.getElementById("user_email").value = (email !== 'None') ? email : '';
-        document.getElementById("user_telefone").value = (telefone !== 'None') ? telefone : ''; 
+        document.getElementById("user_telefone").value = (telefone !== 'None') ? telefone : '';
         document.getElementById("user_perfil").value = perfil;
-        document.getElementById("user_senha").value = ""; 
-        
+        document.getElementById("user_ativo").value = ativo || 'A';
+        document.getElementById("campos_senha_novo").style.display = "none";
+        document.getElementById("campo_ativo").style.display = "block";
         document.getElementById("modalUsuario").style.display = "flex";
     };
 
-    // INICIALIZAÇÃO DE ÍCONES
-    document.addEventListener("DOMContentLoaded", function() {
-        if (typeof lucide !== 'undefined') {
-            lucide.createIcons();
+    function verificarSenhaNovo() {
+        const senha = document.getElementById("user_senha").value;
+        const confirma = document.getElementById("user_senha_confirma").value;
+        const erro = document.getElementById("erro-senha-novo");
+        if (confirma && senha !== confirma) {
+            erro.style.display = "block";
+        } else {
+            erro.style.display = "none";
+        }
+    }
+
+    document.getElementById("formUsuario").addEventListener("submit", function(e) {
+        const camposSenha = document.getElementById("campos_senha_novo");
+        if (camposSenha.style.display !== "none") {
+            const senha = document.getElementById("user_senha").value;
+            const confirma = document.getElementById("user_senha_confirma").value;
+            if (senha !== confirma) {
+                document.getElementById("erro-senha-novo").style.display = "block";
+                e.preventDefault();
+            }
         }
     });
 
-    // FECHAR MODAL AO CLICAR FORA
+    window.abrirAlterarSenha = function(id, nome) {
+        document.getElementById("senha_user_id").value = id;
+        document.getElementById("modal-senha-nome").innerText = "Usuário: " + nome;
+        document.getElementById("senha_antiga").value = "";
+        document.getElementById("senha_nova").value = "";
+        document.getElementById("senha_confirma").value = "";
+        document.getElementById("erro-senha-modal").style.display = "none";
+        document.getElementById("modalSenha").style.display = "flex";
+    };
+
+    function verificarConfirmacao() {
+        const nova = document.getElementById("senha_nova").value;
+        const confirma = document.getElementById("senha_confirma").value;
+        const erro = document.getElementById("erro-senha-modal");
+        if (confirma && nova !== confirma) {
+            erro.innerText = "As senhas não conferem.";
+            erro.style.display = "block";
+        } else {
+            erro.style.display = "none";
+        }
+    }
+
+    function validarSenhas() {
+        const nova = document.getElementById("senha_nova").value;
+        const confirma = document.getElementById("senha_confirma").value;
+        const erro = document.getElementById("erro-senha-modal");
+        if (nova !== confirma) {
+            erro.innerText = "As senhas não conferem.";
+            erro.style.display = "block";
+            return false;
+        }
+        return true;
+    }
+
+    document.addEventListener("DOMContentLoaded", function() {
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    });
+
     window.onclick = function(event) {
         const modalUser = document.getElementById('modalUsuario');
+        const modalSenha = document.getElementById('modalSenha');
         const modalConfirm = document.getElementById('modalConfirmacaoGlobal');
         if (event.target == modalUser) modalUser.style.display = 'none';
+        if (event.target == modalSenha) modalSenha.style.display = 'none';
         if (event.target == modalConfirm && typeof fecharConfirmacaoGlobal === 'function') fecharConfirmacaoGlobal();
     };
 </script>

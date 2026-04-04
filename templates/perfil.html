@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px;">
+    <h2 style="color: #1e293b; font-weight: 700;">🏷️ Perfis de Acesso</h2>
+    <button onclick="novoPerfil()"
+        style="display:inline-flex; align-items:center; gap:8px; background: linear-gradient(135deg, #4f46e5, #7c3aed); color: white; border: none; padding: 11px 22px; border-radius: 12px; cursor: pointer; font-weight: 700; font-size: 14px; box-shadow: 0 4px 14px rgba(79,70,229,0.4); transition: transform 0.15s, box-shadow 0.15s;"
+        onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(79,70,229,0.5)'"
+        onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 14px rgba(79,70,229,0.4)'">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Novo Perfil
+    </button>
+</div>
+
+<div style="background: white; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); overflow: hidden; border: 1px solid #f1f5f9; max-width: 600px;">
+    <table style="width: 100%; border-collapse: collapse;">
+        <thead style="background: #f8fafc; border-bottom: 2px solid #f1f5f9;">
+            <tr>
+                {% set next_order = 'desc' if order == 'asc' else 'asc' %}
+                {% macro th(col, label, align='left') %}
+                    {% set is_active = sort == col %}
+                    {% set arrow = ' ↑' if (is_active and order == 'asc') else ' ↓' if (is_active and order == 'desc') else '' %}
+                    <th style="padding: 15px; text-align: {{ align }}; font-size: 11px; text-transform: uppercase; cursor: pointer; user-select: none;
+                               color: {{ '#4f46e5' if is_active else '#64748b' }}; background: {{ '#f0f0ff' if is_active else 'transparent' }};">
+                        <a href="?sort={{ col }}&order={{ next_order if is_active else 'asc' }}"
+                           style="text-decoration:none; color:inherit; display:block;">
+                            {{ label }}{{ arrow }}
+                        </a>
+                    </th>
+                {% endmacro %}
+                {{ th('nome',  'Nome do Perfil') }}
+                {{ th('nivel', 'Nível', 'center') }}
+                <th style="padding: 15px; text-align: center; color: #64748b; font-size: 11px; text-transform: uppercase;">Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for p in perfis %}
+            <tr style="border-bottom: 1px solid #f1f5f9; transition: 0.2s;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='white'">
+                <td style="padding: 15px; font-weight: 600; color: #1e293b;">
+                    <span style="background:#e0e7ff; color:#4338ca; padding:4px 12px; border-radius:12px; font-size:12px; font-weight:700;">{{ p.nome }}</span>
+                </td>
+                <td style="padding: 15px; text-align: center; color: #64748b; font-weight: 600;">
+                    {% if p.nivel %}
+                        <span style="background:#f1f5f9; color:#475569; padding:4px 12px; border-radius:12px; font-size:12px; font-weight:700;">{{ p.nivel }}</span>
+                    {% else %}
+                        <span style="color:#cbd5e1; font-style:italic; font-size:12px;">—</span>
+                    {% endif %}
+                </td>
+                <td style="padding: 15px; text-align: center;">
+                    <div style="display:flex; justify-content:center; gap:12px;">
+                        <button type="button"
+                            onclick="editarPerfil('{{ p.id }}', '{{ p.nome }}', '{{ p.nivel or '' }}')"
+                            title="Editar" style="color: #6366f1; background: none; border: none; cursor: pointer;">
+                            <i data-lucide="edit-3" style="width: 18px;"></i>
+                        </button>
+                        <button type="button"
+                            onclick="abrirConfirmacaoGlobal('{{ url_for('deletar_perfil', id=p.id) }}', 'Excluir Perfil', 'Deseja excluir o perfil <b>{{ p.nome }}</b>?<br><small style=\'color:#ef4444\'>Usuários e operadores vinculados perderão o perfil.</small>')"
+                            title="Excluir" style="color: #ef4444; background: none; border: none; cursor: pointer;">
+                            <i data-lucide="trash-2" style="width: 18px;"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- MODAL -->
+<div id="modalPerfil" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,0.7); z-index:9999; align-items:center; justify-content:center; backdrop-filter:blur(4px);">
+    <div style="background:white; width:95%; max-width:400px; border-radius:20px; padding:30px; box-shadow:0 20px 25px -5px rgba(0,0,0,0.1);">
+        <h2 id="modal-perfil-title" style="color:#1e293b; font-weight:700; margin-bottom:20px;">Perfil</h2>
+
+        <form action="/perfil/salvar" method="POST">
+            <input type="hidden" name="id" id="p_id">
+
+            <div style="margin-bottom: 15px;">
+                <label class="label-form">Nome do Perfil</label>
+                <input type="text" name="nome" id="p_nome" required maxlength="20" class="input-form" placeholder="Ex: Administrador">
+            </div>
+
+            <div style="margin-bottom: 20px;">
+                <label class="label-form">Nível <span style="color:#94a3b8; font-weight:400;">(número — quanto menor, maior o acesso)</span></label>
+                <input type="number" name="nivel" id="p_nivel" min="1" max="99" class="input-form" placeholder="Ex: 1">
+            </div>
+
+            <div style="display:flex; gap:10px;">
+                <button type="button" onclick="document.getElementById('modalPerfil').style.display='none'"
+                    style="flex:1; padding:12px; border-radius:10px; border:1px solid #e2e8f0; background:white; color:#64748b; font-weight:600; cursor:pointer;">Cancelar</button>
+                <button type="submit"
+                    style="flex:1; padding:12px; border-radius:10px; background:#4f46e5; color:white; border:none; font-weight:700; cursor:pointer;">Gravar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    function novoPerfil() {
+        document.getElementById('modal-perfil-title').innerText = 'Novo Perfil';
+        document.getElementById('p_id').value    = '';
+        document.getElementById('p_nome').value  = '';
+        document.getElementById('p_nivel').value = '';
+        document.getElementById('modalPerfil').style.display = 'flex';
+    }
+
+    function editarPerfil(id, nome, nivel) {
+        document.getElementById('modal-perfil-title').innerText = 'Editar Perfil';
+        document.getElementById('p_id').value    = id;
+        document.getElementById('p_nome').value  = nome;
+        document.getElementById('p_nivel').value = nivel;
+        document.getElementById('modalPerfil').style.display = 'flex';
+    }
+
+    window.onclick = function(event) {
+        const modal = document.getElementById('modalPerfil');
+        if (event.target == modal) modal.style.display = 'none';
+    };
+</script>
+{% endblock %}
