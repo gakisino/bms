@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recibo de Prêmio #{{ premio.id }}</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: Arial, sans-serif;
+            background: #f8fafc;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 30px 20px;
+        }
+
+        .no-print {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 30px;
+        }
+        .btn-imprimir {
+            padding: 10px 24px;
+            background: #4f46e5;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 700;
+        }
+        .btn-voltar {
+            padding: 10px 24px;
+            background: white;
+            color: #64748b;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+        }
+
+        .recibo {
+            background: white;
+            width: 100%;
+            max-width: 600px;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 40px 50px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.06);
+        }
+
+        .recibo-header {
+            text-align: center;
+            border-bottom: 2px solid #1e293b;
+            padding-bottom: 16px;
+            margin-bottom: 24px;
+        }
+        .recibo-header h1 {
+            font-size: 20px;
+            color: #1e293b;
+            font-weight: 900;
+            letter-spacing: 0.5px;
+        }
+
+        .recibo-valor {
+            text-align: center;
+            font-size: 30px;
+            font-weight: 900;
+            color: #1e293b;
+            margin-bottom: 28px;
+            padding: 16px;
+            border: 2px solid #1e293b;
+            border-radius: 8px;
+        }
+        .recibo-valor small {
+            display: block;
+            font-size: 11px;
+            font-weight: 600;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 4px;
+        }
+
+        .recibo-texto {
+            font-size: 14px;
+            line-height: 2;
+            color: #1e293b;
+            text-align: justify;
+            margin-bottom: 20px;
+        }
+
+        .recibo-quitacao {
+            font-size: 14px;
+            line-height: 2;
+            color: #1e293b;
+            text-align: justify;
+            margin-bottom: 36px;
+        }
+
+        .recibo-rodape {
+            margin-bottom: 50px;
+            font-size: 14px;
+            color: #1e293b;
+        }
+
+        .recibo-assinatura {
+            text-align: center;
+            padding-top: 12px;
+            border-top: 1px solid #1e293b;
+            width: 320px;
+            margin: 0 auto;
+            font-size: 14px;
+            font-weight: 700;
+            color: #1e293b;
+        }
+
+        @media print {
+            body { background: white; padding: 0; }
+            .no-print { display: none !important; }
+            .recibo {
+                border: none;
+                border-radius: 0;
+                box-shadow: none;
+                padding: 30px 40px;
+                max-width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="no-print">
+    <button class="btn-imprimir" onclick="window.print()">🖨 Imprimir</button>
+    <a href="/premios" class="btn-voltar">← Voltar</a>
+</div>
+
+<div class="recibo">
+
+    <div class="recibo-header">
+        <h1>BMS - Brasil Mobile School</h1>
+    </div>
+
+    <div class="recibo-valor">
+        <small>Valor</small>
+        R$ {{ "%.2f"|format(premio.valor) | replace('.', ',') }}
+    </div>
+
+    <div class="recibo-texto">
+        Eu <strong>{{ premio.operador_nome }}</strong>, declaro para os devidos fins que recebi a
+        importância acima descrita, referente ao prêmio de
+        <strong>{{ premio.quantidade }}</strong>
+        — <strong>{{ 'Visita' if premio.tipo == 'V' else 'Matrícula' }}{{ 's' if premio.quantidade != 1 else '' }}</strong>
+        do dia <strong>{{ premio.data.strftime('%d/%m/%Y') if premio.data else '—' }}</strong>
+        pela BMS - Brasil Mobile School <strong>{{ premio.unidade_nome or '' }}</strong>.
+    </div>
+
+    <div class="recibo-quitacao">
+        Sem mais nada a reclamar e dando plena e total quitação deste prêmio.
+    </div>
+
+    <div class="recibo-rodape">
+        {{ premio.unidade_cidade or '' }}, {{ data_impressao }}
+    </div>
+
+    <div class="recibo-assinatura">
+        {{ premio.operador_nome }}
+    </div>
+
+</div>
+
+</body>
+</html>

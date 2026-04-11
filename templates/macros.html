@@ -1,0 +1,109 @@
+{# ============================================================
+   macros.html — Componentes reutilizáveis do projeto BMS
+   Uso: {% from 'macros.html' import btn_novo, badge_status, badge_perfil, th_sort %}
+   ============================================================ #}
+
+
+{# ----------------------------------------------------------
+   btn_novo(label, onclick)
+   Botão padrão de inclusão com gradiente roxo e efeito hover.
+   label   — texto do botão, ex: "Novo Usuário"
+   onclick — chamada JS, ex: "window.novoUsuario()"
+   ---------------------------------------------------------- #}
+{% macro btn_novo(label, onclick) %}
+<button onclick="{{ onclick }}"
+    style="display:inline-flex; align-items:center; gap:8px;
+           background: linear-gradient(135deg, #4f46e5, #7c3aed);
+           color:white; border:none; padding:11px 22px; border-radius:12px;
+           cursor:pointer; font-weight:700; font-size:14px;
+           box-shadow:0 4px 14px rgba(79,70,229,0.4);
+           transition:transform 0.15s, box-shadow 0.15s;"
+    onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(79,70,229,0.5)'"
+    onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 14px rgba(79,70,229,0.4)'">
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
+         fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+    </svg>
+    {{ label }}
+</button>
+{% endmacro %}
+
+
+{# ----------------------------------------------------------
+   badge_status(valor)
+   Badge colorido para status A/I/B.
+   valor — 'A' (Ativo), 'I' (Inativo), 'B' (Bloqueado)
+   ---------------------------------------------------------- #}
+{% macro badge_status(valor) %}
+{% if valor == 'A' %}
+    <span style="background:#dcfce7; color:#166534; padding:4px 12px; border-radius:12px; font-size:11px; font-weight:bold;">Ativo</span>
+{% elif valor == 'I' %}
+    <span style="background:#fef9c3; color:#854d0e; padding:4px 12px; border-radius:12px; font-size:11px; font-weight:bold;">Inativo</span>
+{% elif valor == 'B' %}
+    <span style="background:#fee2e2; color:#991b1b; padding:4px 12px; border-radius:12px; font-size:11px; font-weight:bold;">Bloqueado</span>
+{% else %}
+    <span style="background:#f1f5f9; color:#64748b; padding:4px 12px; border-radius:12px; font-size:11px; font-weight:bold;">{{ valor }}</span>
+{% endif %}
+{% endmacro %}
+
+
+{# ----------------------------------------------------------
+   badge_perfil(nome, cor='#e0e7ff', cor_texto='#1e293b', vazio='Não definido')
+   Badge customizável para nome de perfil.
+   nome      — string ou None
+   cor       — cor de fundo em hexadecimal (padrão: azul claro)
+   cor_texto — cor do texto em hexadecimal (padrão: cinza escuro)
+   vazio     — texto exibido quando nome é vazio/None
+   ---------------------------------------------------------- #}
+{% macro badge_perfil(nome, cor='#e0e7ff', cor_texto='#1e293b', vazio='Não definido') %}
+{% if nome %}
+    <span style="background:{{ cor }}; color:{{ cor_texto }}; padding:4px 10px; border-radius:12px; font-size:11px; font-weight:bold;">{{ nome }}</span>
+{% else %}
+    <span style="color:#cbd5e1; font-style:italic; font-size:12px;">{{ vazio }}</span>
+{% endif %}
+{% endmacro %}
+
+
+{# ----------------------------------------------------------
+   th_sort(col, label, sort, order, align='left', extra_params='')
+   Cabeçalho de tabela clicável com indicador de ordenação.
+   col          — nome da coluna para ordenar, ex: 'nome'
+   label        — texto exibido, ex: 'Nome'
+   sort         — coluna atualmente ordenada (vinda da view)
+   order        — direção atual 'asc' ou 'desc' (vinda da view)
+   align        — alinhamento do texto: 'left' | 'center' | 'right'
+   extra_params — query params extras a preservar, ex: '&q=' ~ busca
+   ---------------------------------------------------------- #}
+{# ----------------------------------------------------------
+   badge_premio_status(status)
+   Badge colorido para status de prêmio I/A/P/C.
+   ---------------------------------------------------------- #}
+{% macro badge_premio_status(status) %}
+{% if status == 'I' %}
+    <span style="background:#dbeafe; color:#1e40af; padding:4px 12px; border-radius:12px; font-size:11px; font-weight:bold;">Incluso</span>
+{% elif status == 'A' %}
+    <span style="background:#dcfce7; color:#166534; padding:4px 12px; border-radius:12px; font-size:11px; font-weight:bold;">Autorizado</span>
+{% elif status == 'P' %}
+    <span style="background:#f1f5f9; color:#475569; padding:4px 12px; border-radius:12px; font-size:11px; font-weight:bold;">Pago</span>
+{% elif status == 'C' %}
+    <span style="background:#fee2e2; color:#991b1b; padding:4px 12px; border-radius:12px; font-size:11px; font-weight:bold;">Cancelado</span>
+{% else %}
+    <span style="background:#f1f5f9; color:#64748b; padding:4px 12px; border-radius:12px; font-size:11px; font-weight:bold;">{{ status }}</span>
+{% endif %}
+{% endmacro %}
+
+
+{% macro th_sort(col, label, sort, order, align='left', extra_params='') %}
+{% set is_active  = sort == col %}
+{% set next_order = 'desc' if (is_active and order == 'asc') else 'asc' %}
+{% set arrow      = ' ↑' if (is_active and order == 'asc') else ' ↓' if (is_active and order == 'desc') else '' %}
+<th style="padding:15px; text-align:{{ align }}; font-size:11px; text-transform:uppercase;
+           cursor:pointer; user-select:none;
+           color:{{ '#4f46e5' if is_active else '#64748b' }};
+           background:{{ '#f0f0ff' if is_active else 'transparent' }};">
+    <a href="?sort={{ col }}&order={{ next_order }}{{ extra_params }}"
+       style="text-decoration:none; color:inherit; display:block;">
+        {{ label }}{{ arrow }}
+    </a>
+</th>
+{% endmacro %}

@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+{% from 'macros.html' import btn_novo, badge_perfil %}
+
+{% block content %}
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:25px;">
+    <h2 style="color:#1e293b; font-weight:700;">💰 Tabela de Regra de Prêmios</h2>
+    {{ btn_novo('Nova Regra', 'abrirModalPremioTabela()') }}
+</div>
+
+<div style="background:white; border-radius:15px; box-shadow:0 4px 15px rgba(0,0,0,0.05); overflow:hidden; border:1px solid #f1f5f9;">
+    <table style="width:100%; border-collapse:collapse;">
+        <thead style="background:#f8fafc; border-bottom:2px solid #f1f5f9;">
+            <tr>
+                <th style="padding:14px 18px; text-align:left;   font-size:11px; text-transform:uppercase; color:#64748b;">Período</th>
+                <th style="padding:14px 18px; text-align:center; font-size:11px; text-transform:uppercase; color:#64748b;">Tipo</th>
+                <th style="padding:14px 18px; text-align:center; font-size:11px; text-transform:uppercase; color:#64748b;">Quantidade</th>
+                <th style="padding:14px 18px; text-align:right;  font-size:11px; text-transform:uppercase; color:#64748b;">Valor (R$)</th>
+                <th style="padding:14px 18px; text-align:left;   font-size:11px; text-transform:uppercase; color:#64748b;">Perfil</th>
+                <th style="padding:14px 18px; text-align:left;   font-size:11px; text-transform:uppercase; color:#64748b;">Descrição</th>
+                <th style="padding:14px 18px; text-align:center; font-size:11px; text-transform:uppercase; color:#64748b;">Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for p in premios_tabela %}
+            <tr style="border-bottom:1px solid #f1f5f9; transition:0.2s;"
+                onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='white'">
+                <td style="padding:14px 18px; font-weight:600; color:#1e293b;">{{ p.periodo }}</td>
+                <td style="padding:14px 18px; text-align:center;">
+                    {% if p.tipo == 'V' %}
+                    <span style="background:#ede9fe; color:#6d28d9; padding:3px 10px; border-radius:10px; font-size:11px; font-weight:700;">Visitas</span>
+                    {% else %}
+                    <span style="background:#fef3c7; color:#92400e; padding:3px 10px; border-radius:10px; font-size:11px; font-weight:700;">Matrículas</span>
+                    {% endif %}
+                </td>
+                <td style="padding:14px 18px; text-align:center; font-weight:600; color:#1e293b;">{{ p.quantidade }}</td>
+                <td style="padding:14px 18px; text-align:right; font-weight:700; color:#1e293b;">{{ "%.2f"|format(p.valor) | replace('.', ',') }}</td>
+                <td style="padding:14px 18px;">{{ badge_perfil(p.perfil_nome, p.cor_bg or '#e0e7ff', p.cor_texto or '#1e293b') }}</td>
+                <td style="padding:14px 18px; color:#64748b; font-size:13px;">{{ p.descricao or '—' }}</td>
+                <td style="padding:14px 18px; text-align:center;">
+                    <div style="display:flex; justify-content:center; gap:12px;">
+                        <button type="button"
+                            onclick="editarPremioTabela({{ p.id }}, '{{ p.tipo }}', {{ p.quantidade }}, {{ p.valor }}, '{{ p.descricao or '' }}', '{{ p.periodo }}', {{ p.id_perfil or 'null' }})"
+                            title="Editar"
+                            style="color:#6366f1; background:none; border:none; cursor:pointer;">
+                            <i data-lucide="edit-3" style="width:17px;"></i>
+                        </button>
+                        <button type="button"
+                            onclick="abrirConfirmacaoGlobal('/premios_tabela/deletar/{{ p.id }}', 'Deletar Regra', 'Deseja deletar esta regra de prêmio?')"
+                            title="Deletar"
+                            style="color:#ef4444; background:none; border:none; cursor:pointer;">
+                            <i data-lucide="trash-2" style="width:17px;"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="7" style="padding:40px; text-align:center; color:#94a3b8;">Nenhum prêmio cadastrado na tabela.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+
+{# ===== MODAL NOVO / EDITAR ===== #}
+<div id="modalPremioTabela" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:10000;
+     align-items:center; justify-content:center; backdrop-filter:blur(4px);">
+    <div style="background:white; width:90%; max-width:480px; border-radius:16px; padding:30px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:22px;">
+            <h3 id="tituloPremioTabela" style="color:#1e293b; font-size:18px; font-weight:700;">Nova Regra</h3>
+            <button onclick="fecharModalPremioTabela()" style="background:none; border:none; font-size:22px; cursor:pointer; color:#64748b; line-height:1;">✕</button>
+        </div>
+
+        <form id="formPremioTabela" method="POST" action="/premios_tabela/salvar">
+            <input type="hidden" name="id" id="idPremioTabela">
+
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px; margin-bottom:15px;">
+                <div>
+                    <label class="label-form">Tipo de Meta *</label>
+                    <div style="display:flex; gap:15px; margin-top:10px;">
+                        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:13px;">
+                            <input type="radio" name="tipo" value="V" id="tipoVTabela" required> Visitas
+                        </label>
+                        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:13px;">
+                            <input type="radio" name="tipo" value="M" id="tipoMTabela"> Matrículas
+                        </label>
+                    </div>
+                </div>
+                <div>
+                    <label class="label-form">Quantidade *</label>
+                    <input type="number" name="quantidade" id="quantidadeTabela" class="input-form" min="1" required placeholder="Ex: 3">
+                </div>
+            </div>
+
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px; margin-bottom:15px;">
+                <div>
+                    <label class="label-form">Valor (R$) *</label>
+                    <input type="number" name="valor" id="valorTabela" class="input-form" step="0.01" min="0.01" required placeholder="0,00">
+                </div>
+                <div>
+                    <label class="label-form">Período *</label>
+                    <select name="periodo" id="periodoTabela" class="input-form" required>
+                        <option value="">Selecione...</option>
+                        <option value="Diário">Diário</option>
+                        <option value="Semanal">Semanal</option>
+                        <option value="Quinzenal">Quinzenal</option>
+                        <option value="Mensal">Mensal</option>
+                    </select>
+                </div>
+            </div>
+
+            <div style="margin-bottom:15px;">
+                <label class="label-form">Perfil</label>
+                <select name="id_perfil" id="idPerfilTabela" class="input-form">
+                    <option value="">Todos os perfis</option>
+                    {% for pf in perfis %}
+                    <option value="{{ pf.id }}">{{ pf.nome }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div style="margin-bottom:22px;">
+                <label class="label-form">Descrição</label>
+                <input type="text" name="descricao" id="descricaoTabela" class="input-form" placeholder="Ex: Prêmio por 3 visitas em um mês" maxlength="50">
+            </div>
+
+            <div style="display:flex; gap:10px; justify-content:flex-end;">
+                <button type="button" onclick="fecharModalPremioTabela()"
+                    style="padding:11px 22px; border-radius:10px; border:1px solid #ddd; background:white; cursor:pointer; color:#64748b; font-weight:600;">
+                    Cancelar
+                </button>
+                <button type="submit"
+                    style="padding:11px 22px; border-radius:10px; background:linear-gradient(135deg,#4f46e5,#7c3aed); color:white; border:none; cursor:pointer; font-weight:700; box-shadow:0 4px 14px rgba(79,70,229,0.4);">
+                    Salvar Regra
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+
+<script>
+function abrirModalPremioTabela() {
+    document.getElementById('formPremioTabela').reset();
+    document.getElementById('idPremioTabela').value = '';
+    document.getElementById('tituloPremioTabela').textContent = 'Nova Regra';
+    document.getElementById('tipoVTabela').checked = true;
+    document.getElementById('idPerfilTabela').value = '';
+    document.getElementById('modalPremioTabela').style.display = 'flex';
+}
+
+function fecharModalPremioTabela() {
+    document.getElementById('modalPremioTabela').style.display = 'none';
+}
+
+function editarPremioTabela(id, tipo, quantidade, valor, descricao, periodo, idPerfil) {
+    document.getElementById('idPremioTabela').value = id;
+    document.getElementById('tituloPremioTabela').textContent = 'Editar Regra';
+    document.getElementById('tipoVTabela').checked = (tipo === 'V');
+    document.getElementById('tipoMTabela').checked = (tipo === 'M');
+    document.getElementById('quantidadeTabela').value = quantidade;
+    document.getElementById('valorTabela').value = valor;
+    document.getElementById('descricaoTabela').value = descricao;
+    document.getElementById('periodoTabela').value = periodo;
+    document.getElementById('idPerfilTabela').value = idPerfil || '';
+    document.getElementById('modalPremioTabela').style.display = 'flex';
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('modalPremioTabela').addEventListener('click', function(e) {
+        if (e.target === this) fecharModalPremioTabela();
+    });
+});
+</script>
+{% endblock %}

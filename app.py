@@ -1,10 +1,17 @@
 import re
-from flask import Flask, render_template, request, redirect, url_for, session, flash
+from functools import wraps
+from contextlib import contextmanager
+from decimal import Decimal, ROUND_HALF_UP
+from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
 from werkzeug.security import check_password_hash, generate_password_hash
-from datetime import date
+from datetime import date, datetime
 import mysql.connector
+
 app = Flask(__name__)
 app.secret_key = "segredo_super_secreto"
+
+# Cache de IDs das rotinas (carregado dinamicamente do banco)
+ROTINAS_CACHE = {}
 
 def get_db():
     return mysql.connector.connect(
@@ -13,6 +20,119 @@ def get_db():
         password="admin",
         database="bms"
     )
+
+@contextmanager
+def get_cursor(dictionary=True):
+    conn = get_db()
+    cursor = conn.cursor(dictionary=dictionary)
+    try:
+        yield conn, cursor
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        cursor.close()
+        conn.close()
+
+def carregar_rotinas_cache():
+    """Carrega mapeamento apelido → ID das rotinas do banco de dados"""
+    global ROTINAS_CACHE
+    try:
+        with get_cursor() as (_, cursor):
+            cursor.execute("SELECT id, apelido FROM rotinas WHERE ativo = 1")
+            ROTINAS_CACHE = {row['apelido']: row['id'] for row in cursor.fetchall()}
+            print(f"[OK] Rotinas carregadas no cache: {ROTINAS_CACHE}")
+    except Exception as e:
+        print(f"[AVISO] Erro ao carregar cache de rotinas: {e}")
+        ROTINAS_CACHE = {}
+
+def get_rotina_id(apelido):
+    """Obtém ID de uma rotina pelo apelido (usa cache)"""
+    if not ROTINAS_CACHE:
+        carregar_rotinas_cache()
+    return ROTINAS_CACHE.get(apelido)
+
+
+# Context processor para injetar funções nos templates
+@app.context_processor
+def injetar_permissoes():
+    def tem_acesso_rotina(id_rotina):
+        """Verifica se o usuário logado tem acesso a uma rotina (utilizado nos templates)"""
+        if 'rotinas_acesso' not in session:
+            return True  # Se não houver dados, libera acesso por enquanto
+        return int(id_rotina) in session.get('rotinas_acesso', [])
+
+    def tem_acesso_alteracao(nome_rotina):
+        """Verifica se o usuário logado tem acesso de ALTERAÇÃO a uma rotina"""
+        if 'usuario_id' not in session:
+            return False
+        return verificar_acesso_alteracao(session['usuario_id'], nome_rotina)
+
+    return dict(
+        tem_acesso_rotina=tem_acesso_rotina,
+        tem_acesso_alteracao=tem_acesso_alteracao,
+        rotinas_acesso=session.get('rotinas_acesso', []),
+        get_rotina_id=get_rotina_id  # Passa função para buscar ID pelo nome no template
+    )
+
+
+# Carrega cache de rotinas na inicialização
+carregar_rotinas_cache()
+
+
+def login_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if 'usuario_id' not in session:
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated
+
+
+def acesso_alteracao_required(nome_rotina):
+    """Decorador que verifica acesso de ALTERAÇÃO a uma rotina (não apenas leitura)"""
+    def decorator(f):
+        @wraps(f)
+        def decorated(*args, **kwargs):
+            if 'usuario_id' not in session:
+                return redirect(url_for('login'))
+
+            if not verificar_acesso_alteracao(session['usuario_id'], nome_rotina):
+                flash('Você tem apenas acesso de leitura a esta rotina.', 'erro')
+                referrer = request.referrer or '/dashboard'
+                return redirect(referrer)
+
+            return f(*args, **kwargs)
+        return decorated
+    return decorator
+
+
+def acesso_rotina_required(nome_rotina):
+    """Decorador que verifica acesso a uma rotina específica pelo nome"""
+    def decorator(f):
+        @wraps(f)
+        def decorated(*args, **kwargs):
+            if 'usuario_id' not in session:
+                return redirect(url_for('login'))
+
+            # Busca ID da rotina dinamicamente
+            id_rotina = get_rotina_id(nome_rotina)
+            if not id_rotina:
+                print(f"[AVISO] Rotina '{nome_rotina}' não encontrada no banco")
+                flash('Rotina não configurada no sistema.', 'erro')
+                return redirect('/dashboard')
+
+            acesso = verificar_acesso_rotina(session['usuario_id'], id_rotina)
+            if not acesso:
+                flash('Você não tem permissão para acessar esta rotina.', 'erro')
+                return redirect('/dashboard')
+
+            # Armazena tipo de acesso na sessão para a rotina
+            session[f'acesso_rotina_{id_rotina}'] = acesso
+            return f(*args, **kwargs)
+        return decorated
+    return decorator
 
 
 # 🔐 LOGIN FUNCIONAL
@@ -23,413 +143,302 @@ def login():
         email = request.form['email']
         senha = request.form['senha']
 
-        conn = get_db()
-        cursor = conn.cursor(dictionary=True)
-
-        cursor.execute("SELECT * FROM usuarios WHERE email = %s", (email,))
-        usuario = cursor.fetchone()
-
-        cursor.close()
-        conn.close()
+        with get_cursor() as (_, cursor):
+            cursor.execute("SELECT * FROM usuarios WHERE email = %s", (email,))
+            usuario = cursor.fetchone()
 
         # 🔴 EMAIL NÃO EXISTE
         if not usuario:
             return render_template('login.html', erro="Email não cadastrado")
 
-        # 🔴 SENHA ERRADA
-        if not check_password_hash(usuario['senha'], senha):
-            return render_template('login.html', erro="Senha incorreta")
+        # 🔴 USUÁRIO JÁ BLOQUEADO
+        if usuario['ativo'] == 'B':
+            return render_template('login.html', erro="Usuário bloqueado. Entre em contato com o administrador.")
 
-        # 🔴 USUÁRIO NÃO AUTORIZADO
+        # 🔴 USUÁRIO INATIVO
         if usuario['ativo'] != 'A':
             return render_template('login.html', erro="Usuário não autorizado. Entre em contato com o administrador.")
 
-        # 🔥 validação simples (com hash por enquanto)
-        if usuario and check_password_hash(usuario['senha'], senha):
+        # 🔴 SENHA ERRADA
+        if not check_password_hash(usuario['senha'], senha):
+            novas_tentativas = usuario['tentativas'] + 1
 
-            session['usuario_id'] = usuario['id']
-            session['usuario_nome'] = usuario['nome']
-            session['usuario_email'] = usuario['email']
+            if novas_tentativas >= 5:
+                with get_cursor() as (_, cursor):
+                    cursor.execute(
+                        "UPDATE usuarios SET tentativas=%s, ativo='B' WHERE id=%s",
+                        (novas_tentativas, usuario['id'])
+                    )
+                return render_template('login.html', erro="Usuário bloqueado após 5 tentativas inválidas. Entre em contato com o administrador.")
 
-            return redirect('/agendamento')
+            with get_cursor() as (_, cursor):
+                cursor.execute(
+                    "UPDATE usuarios SET tentativas=%s WHERE id=%s",
+                    (novas_tentativas, usuario['id'])
+                )
+            restantes = 5 - novas_tentativas
+            return render_template('login.html', erro=f"Senha incorreta. {restantes} tentativa(s) restante(s).")
 
-        return render_template('login.html', erro="Login inválido")
+        # ✅ LOGIN OK — zera tentativas e abre sessão
+        with get_cursor() as (_, cursor):
+            cursor.execute("UPDATE usuarios SET tentativas=0 WHERE id=%s", (usuario['id'],))
+
+        session['usuario_id']    = usuario['id']
+        session['usuario_nome']  = usuario['nome']
+        session['usuario_email'] = usuario['email']
+
+        # Carrega rotinas que o usuário tem acesso
+        rotinas_acesso = obter_rotinas_acesso_usuario(usuario['id'])
+        session['rotinas_acesso'] = rotinas_acesso
+
+        return redirect('/agendamento')
 
     return render_template('login.html')
 
 
-# 🔒 PROTEÇÃO
-def protegido():
-    return 'usuario_id' in session
-
-
 # 📅 AGENDAMENTO
 @app.route('/agendamento')
+@login_required
 def agendamento():
-    if not protegido(): 
-        return redirect('/')
-        
-    # 1. Cria a conexão (Resolve o NameError: name 'db' is not defined)
-    conn = get_db() 
-    cursor = conn.cursor(dictionary=True)
-    
-    try:
-        # 2. Busca Agendamentos com os nomes de Unidade e Operador (JOINs)
+    with get_cursor() as (_, cursor):
         cursor.execute("""
-            SELECT a.*, u.nome as unidade_nome, o.nome as operador_nome 
-            FROM agendamento a 
+            SELECT a.*, u.nome as unidade_nome, o.nome as operador_nome
+            FROM agendamento a
             LEFT JOIN unidades u ON a.unidades_id = u.id
             LEFT JOIN operadores o ON a.id_operadores = o.id
             ORDER BY a.data DESC, a.hora DESC
         """)
         lista_agendamentos = cursor.fetchall()
-        
-        # 3. Busca Operadores para o Combo do Modal
         cursor.execute("SELECT id, nome FROM operadores ORDER BY nome")
         lista_operadores = cursor.fetchall()
-        
-        # 4. Busca Unidades para o Combo do Modal
         cursor.execute("SELECT id, nome FROM unidades ORDER BY nome")
         lista_unidades = cursor.fetchall()
 
-    except Exception as e:
-        print(f"Erro no banco: {e}")
-        lista_agendamentos, lista_operadores, lista_unidades = [], [], []
-    finally:
-        cursor.close()
-        conn.close()
-
-    # 5. Envia as TRÊS listas para o HTML
-    return render_template('agendamento.html', 
-                           agendamentos=lista_agendamentos, 
-                           operadores=lista_operadores, 
+    return render_template('agendamento.html',
+                           agendamentos=lista_agendamentos,
+                           operadores=lista_operadores,
                            unidades=lista_unidades)
 
-# 💾 SALVAR
-@app.route('/agendamento/salvar', methods=['POST'])
-def salvar_agendamento():
-    if not protegido(): return redirect('/')
 
-    # 1. Captura os dados (Certifique-se que o nome 'id_operadores' bate com o HTML)
+# 💾 SALVAR AGENDAMENTO
+@app.route('/agendamento/salvar', methods=['POST'])
+@login_required
+def salvar_agendamento():
     id_ag       = request.form.get('id')
     nome        = request.form.get('nome')
     data        = request.form.get('data')
     hora        = request.form.get('hora')
     unidade     = request.form.get('unidades_id')
-    operador    = request.form.get('id_operadores') # <--- ESTA LINHA
+    operador    = request.form.get('id_operadores') or None
     idade       = request.form.get('idade')
     responsavel = request.form.get('responsavel')
     telefone    = request.form.get('telefone')
     confirmado  = 1 if request.form.get('confirmado') else 0
     compareceu  = 1 if request.form.get('compareceu') else 0
 
-    # Tratamento para evitar erro se o combo estiver vazio (envia NULL para o banco)
-    if not operador or operador == "":
-        operador = None
-
-    conn = get_db()
-    cursor = conn.cursor()
-    
     try:
-        if id_ag:
-            # UPDATE (Atenção à ordem: id_operadores está após unidades_id)
-            sql = """UPDATE agendamento SET 
-                     nome=%s, data=%s, hora=%s, unidades_id=%s, id_operadores=%s, 
-                     idade=%s, responsavel=%s, telefone=%s, confirmacao=%s, compareceu=%s 
-                     WHERE id=%s"""
-            params = (nome, data, hora, unidade, operador, idade, responsavel, telefone, confirmado, compareceu, id_ag)
-            cursor.execute(sql, params)
-        else:
-            # INSERT
-            sql = """INSERT INTO agendamento 
-                     (nome, data, hora, unidades_id, id_operadores, idade, responsavel, telefone, confirmacao, compareceu) 
-                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"""
-            params = (nome, data, hora, unidade, operador, idade, responsavel, telefone, confirmado, compareceu)
-            cursor.execute(sql, params)
-        
-        conn.commit()
-        print("Salvamento concluído com sucesso!") # Log para debug
+        with get_cursor(dictionary=False) as (_, cursor):
+            if id_ag:
+                cursor.execute("""UPDATE agendamento SET
+                    nome=%s, data=%s, hora=%s, unidades_id=%s, id_operadores=%s,
+                    idade=%s, responsavel=%s, telefone=%s, confirmacao=%s, compareceu=%s
+                    WHERE id=%s""",
+                    (nome, data, hora, unidade, operador, idade, responsavel, telefone, confirmado, compareceu, id_ag))
+            else:
+                cursor.execute("""INSERT INTO agendamento
+                    (nome, data, hora, unidades_id, id_operadores, idade, responsavel, telefone, confirmacao, compareceu)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                    (nome, data, hora, unidade, operador, idade, responsavel, telefone, confirmado, compareceu))
     except Exception as e:
-        print(f"ERRO AO SALVAR NO BANCO: {e}")
-        conn.rollback()
-    finally:
-        cursor.close()
-        conn.close()
+        print(f"ERRO AO SALVAR AGENDAMENTO: {e}")
+        return redirect('/agendamento?erro=salvar')
 
-    return redirect('/agendamento')
+    return redirect('/agendamento?ok=salvo')
 
-# 🔍 VERIFICAÇÃO (OK)
+
+# 🔍 VERIFICAÇÃO
 @app.route('/agendamento/verificar')
+@login_required
 def verificar_agendamento():
-
-    data = request.args.get('data')
-    hora = request.args.get('hora')
+    data    = request.args.get('data')
+    hora    = request.args.get('hora')
     unidade = request.args.get('unidades_id')
-    id = request.args.get('id')
+    id      = request.args.get('id')
 
-    conn = get_db()
-    cursor = conn.cursor(dictionary=True)
-
-    query = """
-        SELECT nome, telefone, responsavel
-        FROM agendamento
-        WHERE data = %s AND hora = %s AND unidades_id = %s
-    """
-
+    query  = "SELECT nome, telefone, responsavel FROM agendamento WHERE data=%s AND hora=%s AND unidades_id=%s"
     params = [data, hora, unidade]
-
     if id:
         query += " AND id != %s"
         params.append(id)
 
-    cursor.execute(query, params)
-    resultados = cursor.fetchall()
+    with get_cursor() as (_, cursor):
+        cursor.execute(query, params)
+        resultados = cursor.fetchall()
 
-    cursor.close()
-    conn.close()
-
-    return {
-        "conflito": len(resultados) > 0,
-        "dados": resultados
-    }
+    return {"conflito": len(resultados) > 0, "dados": resultados}
 
 
-# DashBoard
 # 📊 DASHBOARD
 @app.route('/dashboard')
+@login_required
 def dashboard():
-
-    if not protegido():
-        return redirect('/')
-
     return render_template('dashboard.html')
 
-# Usuario
+
+# 👥 USUÁRIOS
 @app.route('/usuarios')
+@login_required
+@acesso_rotina_required('usuarios')
 def usuarios():
-    if not protegido():
-        return redirect('/')
+    with get_cursor() as (_, cursor):
+        cursor.execute("""
+            SELECT u.id, u.nome, u.email, u.telefone, u.id_perfil, u.ativo,
+                   p.nome AS perfil_nome, p.cor_bg, p.cor_texto
+            FROM usuarios u
+            LEFT JOIN perfil p ON p.id = u.id_perfil
+            ORDER BY u.nome
+        """)
+        dados_usuarios = cursor.fetchall()
+        cursor.execute("SELECT * FROM perfil ORDER BY nome")
+        dados_perfis = cursor.fetchall()
 
-    conn = get_db()
-    cursor = conn.cursor(dictionary=True)
+    return render_template("usuarios.html", usuarios=dados_usuarios, perfis=dados_perfis)
 
-    cursor.execute("""
-        SELECT u.id, u.nome, u.email, u.telefone, u.id_perfil, u.ativo, p.nome AS perfil_nome
-        FROM usuarios u
-        LEFT JOIN perfil p ON p.id = u.id_perfil
-        ORDER BY u.nome
-    """)
-    dados_usuarios = cursor.fetchall()
-
-    cursor.execute("SELECT * FROM perfil ORDER BY nome")
-    dados_perfis = cursor.fetchall()
-
-    cursor.close()
-    conn.close()
-
-    return render_template("usuarios.html", 
-                           usuarios=dados_usuarios, 
-                           perfis=dados_perfis)
 
 # 🚪 LOGOUT
 @app.route('/logout')
 def logout():
     session.clear()
     return redirect('/')
-# DELETAR
+
+
+# 🗑️ DELETAR AGENDAMENTO
 @app.route('/agendamento/deletar/<int:id>')
+@login_required
 def deletar_agendamento(id):
+    with get_cursor(dictionary=False) as (_, cursor):
+        cursor.execute("DELETE FROM agendamento WHERE id = %s", (id,))
+    return redirect('/agendamento?ok=deletado')
 
-    if not protegido():
-        return redirect('/')
 
-    conn = get_db()
-    cursor = conn.cursor()
-
-    cursor.execute("DELETE FROM agendamento WHERE id = %s", (id,))
-
-    conn.commit()
-    cursor.close()
-    conn.close()
-
-    return redirect('/agendamento')
-
-# ************  Agenda  **************************************
+# 📆 AGENDA
 @app.route('/agenda')
+@login_required
 def agenda():
-    # 1. Pega os filtros da URL ou define padrões
-    data_sel = request.args.get('data', date.today().isoformat())
+    data_sel    = request.args.get('data', date.today().isoformat())
     unidade_sel = request.args.get('unidade', '')
 
-    conn = get_db()
-    cursor = conn.cursor(dictionary=True)
-
-    # 2. Busca Unidades para o Select
-    cursor.execute("SELECT id, nome FROM unidades")
-    unidades = cursor.fetchall()
-
-    # 3. Busca na tabela 'agendamento' (Singular como você definiu)
-    query = """
-        SELECT a.*, u.nome as unidade_nome 
-        FROM agendamento a 
-        JOIN unidades u ON a.unidades_id = u.id 
-        WHERE a.data = %s
-    """
+    query  = """SELECT a.*, u.nome as unidade_nome FROM agendamento a
+                JOIN unidades u ON a.unidades_id = u.id WHERE a.data = %s"""
     params = [data_sel]
-
     if unidade_sel:
         query += " AND a.unidades_id = %s"
         params.append(unidade_sel)
 
-    cursor.execute(query, params)
-    # Aqui criamos a variável que o Python reconhece
-    agendamento = cursor.fetchall() 
+    with get_cursor() as (_, cursor):
+        cursor.execute("SELECT id, nome FROM unidades")
+        unidades = cursor.fetchall()
+        cursor.execute(query, params)
+        agendamentos = cursor.fetchall()
 
-    cursor.close()
-    conn.close()
-
-    # 4. Envia para o HTML
-    # IMPORTANTE: O HTML espera 'agendamentos' no loop {% for a in agendamentos %}
-    return render_template('agenda.html', 
-                           agendamentos=agendamento, # <--- A mágica acontece aqui
+    return render_template('agenda.html',
+                           agendamentos=agendamentos,
                            unidades=unidades,
                            data_selecionada=data_sel,
                            unidade_selecionada=unidade_sel)
-# 💾 SALVAR NOVO USUÁRIO
+
+
+# 💾 SALVAR USUÁRIO
 @app.route('/usuarios/salvar', methods=['POST'])
+@login_required
+@acesso_alteracao_required('usuarios')
 def salvar_usuario():
-    if not protegido():
-        return redirect('/')
-
-    id_usuario = request.form.get('id')
-    nome = request.form['nome']
-    email = request.form['email']
-    senha_plana = request.form.get('senha')
-    id_perfil = request.form['id_perfil']
-    ativo = request.form.get('ativo', 'A')
-    tel_raw = request.form.get('telefone', '')
-    telefone_limpo = re.sub(r'\D', '', tel_raw)
-
-    conn = get_db()
-    cursor = conn.cursor()
+    id_usuario     = request.form.get('id')
+    nome           = request.form['nome']
+    email          = request.form['email']
+    senha_plana    = request.form.get('senha')
+    id_perfil      = request.form['id_perfil']
+    ativo          = request.form.get('ativo', 'A')
+    telefone_limpo = re.sub(r'\D', '', request.form.get('telefone', ''))
 
     try:
-        if id_usuario:  # --- MODO EDIÇÃO ---
-            cursor.execute("""
-                UPDATE usuarios SET nome=%s, email=%s, telefone=%s, id_perfil=%s, ativo=%s WHERE id=%s
-            """, (nome, email, telefone_limpo, id_perfil, ativo, id_usuario))
-        else:  # --- MODO INCLUSÃO ---
-            hash_senha = generate_password_hash(senha_plana)
-            cursor.execute("""
-                INSERT INTO usuarios (nome, email, telefone, senha, id_perfil, ativo) VALUES (%s, %s, %s, %s, %s, %s)
-            """, (nome, email, telefone_limpo, hash_senha, id_perfil, ativo))
-
-        conn.commit()
+        with get_cursor(dictionary=False) as (_, cursor):
+            if id_usuario:
+                cursor.execute("""UPDATE usuarios SET nome=%s, email=%s, telefone=%s, id_perfil=%s, ativo=%s WHERE id=%s""",
+                               (nome, email, telefone_limpo, id_perfil, ativo, id_usuario))
+            else:
+                cursor.execute("""INSERT INTO usuarios (nome, email, telefone, senha, id_perfil, ativo) VALUES (%s,%s,%s,%s,%s,%s)""",
+                               (nome, email, telefone_limpo, generate_password_hash(senha_plana), id_perfil, ativo))
     except Exception as e:
-        print(f"Erro ao salvar: {e}")
+        print(f"Erro ao salvar usuário: {e}")
         return redirect('/usuarios?erro=salvar')
-    finally:
-        cursor.close()
-        conn.close()
 
     return redirect('/usuarios?ok=salvo')
 
 
 # 🔑 ALTERAR SENHA
 @app.route('/usuarios/alterar-senha', methods=['POST'])
+@login_required
 def alterar_senha():
-    if not protegido():
-        return redirect('/')
-
-    id_usuario = request.form.get('id')
+    id_usuario  = request.form.get('id')
     senha_antiga = request.form.get('senha_antiga')
-    senha_nova = request.form.get('senha_nova')
+    senha_nova   = request.form.get('senha_nova')
 
-    conn = get_db()
-    cursor = conn.cursor(dictionary=True)
-
-    try:
+    with get_cursor() as (_, cursor):
         cursor.execute("SELECT senha FROM usuarios WHERE id = %s", (id_usuario,))
         usuario = cursor.fetchone()
 
-        if not usuario or not check_password_hash(usuario['senha'], senha_antiga):
-            return redirect('/usuarios?erro=senha_antiga')
+    if not usuario or not check_password_hash(usuario['senha'], senha_antiga):
+        return redirect('/usuarios?erro=senha_antiga')
 
-        hash_nova = generate_password_hash(senha_nova)
-        cursor.execute("UPDATE usuarios SET senha=%s WHERE id=%s", (hash_nova, id_usuario))
-        conn.commit()
+    try:
+        with get_cursor(dictionary=False) as (_, cursor):
+            cursor.execute("UPDATE usuarios SET senha=%s WHERE id=%s", (generate_password_hash(senha_nova), id_usuario))
     except Exception as e:
         print(f"Erro ao alterar senha: {e}")
-    finally:
-        cursor.close()
-        conn.close()
+        return redirect('/usuarios?erro=salvar')
 
     return redirect('/usuarios?ok=senha_alterada')
 
-# Deletar Usuario
-@app.route('/usuarios/deletar/<int:id>')
-def deletar_usuario(id):
-    if not protegido():
-        return redirect('/')
 
-    conn = get_db()
-    cursor = conn.cursor()
+# 🗑️ DELETAR USUÁRIO
+@app.route('/usuarios/deletar/<int:id>')
+@login_required
+def deletar_usuario(id):
     try:
-        # O segredo é garantir que o commit aconteça sem erros de sintaxe
-        cursor.execute("DELETE FROM usuarios WHERE id = %s", (id,))
-        conn.commit() 
+        with get_cursor(dictionary=False) as (_, cursor):
+            cursor.execute("DELETE FROM usuarios WHERE id = %s", (id,))
     except Exception as e:
         print(f"Erro ao deletar usuário: {e}")
-        conn.rollback()
-    finally:
-        cursor.close()
-        conn.close()
+        return redirect('/usuarios?erro=deletar')
+    return redirect('/usuarios?ok=deletado')
 
-    return redirect('/usuarios')    
 
-# ************ OPERADORES    **************************************
-# ************ OPERADORES (CÓDIGO COMPLETO) ****************************
+# ************ OPERADORES **************************************
 @app.route('/operadores', methods=['GET', 'POST'])
+@login_required
 def operadores():
-    if 'usuario_id' not in session:
-        return redirect(url_for('login'))
-    
-    conn = get_db()
-    cursor = conn.cursor(dictionary=True)
     busca = request.args.get('q', '')
 
     if request.method == 'POST':
         dados = (
-            request.form.get('nome'),
-            request.form.get('codigo'),
-            request.form.get('telefone'),
-            request.form.get('nascimento') or None,
-            request.form.get('endereco'),
-            request.form.get('cidade'),
-            request.form.get('uf'),
-            request.form.get('cpf'),
-            request.form.get('rg'),
-            request.form.get('pix'),
-            request.form.get('contato'),
-            request.form.get('telefone_contato'),
-            request.form.get('id_perfil') or None,
+            request.form.get('nome'), request.form.get('codigo'), request.form.get('telefone'),
+            request.form.get('nascimento') or None, request.form.get('endereco'),
+            request.form.get('cidade'), request.form.get('uf'), request.form.get('cpf'),
+            request.form.get('rg'), request.form.get('pix'), request.form.get('contato'),
+            request.form.get('telefone_contato'), request.form.get('id_perfil') or None,
             request.form.get('status', 'A')
         )
         try:
-            sql = """INSERT INTO operadores
-                     (nome, codigo, telefone, nascimento, endereco, cidade, uf, cpf, rg, pix, contato, telefone_contato, id_perfil, status)
-                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"""
-            cursor.execute(sql, dados)
-            conn.commit()
+            with get_cursor(dictionary=False) as (_, cursor):
+                cursor.execute("""INSERT INTO operadores
+                    (nome, codigo, telefone, nascimento, endereco, cidade, uf, cpf, rg, pix, contato, telefone_contato, id_perfil, status)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""", dados)
         except Exception as e:
-            print(f"Erro Insert: {e}")
-            conn.close()
-            return redirect(url_for('operadores') + '?erro=salvar')
-        finally:
-            conn.close()
-        return redirect(url_for('operadores') + '?ok=salvo')
+            print(f"Erro ao inserir operador: {e}")
+            return redirect(url_for('operadores', erro='salvar'))
+        return redirect(url_for('operadores', ok='salvo'))
 
-    # Ordenação
     colunas_validas = {'nome': 'o.nome', 'codigo': 'o.codigo', 'telefone': 'o.telefone',
                        'perfil': 'p.nome', 'status': 'o.status'}
     sort  = request.args.get('sort', 'nome')
@@ -438,32 +447,26 @@ def operadores():
     if order not in ('asc', 'desc'): order = 'asc'
     order_sql = f"{colunas_validas[sort]} {order}"
 
-    if busca:
-        cursor.execute(f"""
-            SELECT o.*, p.nome AS perfil_nome FROM operadores o
-            LEFT JOIN perfil p ON p.id = o.id_perfil
-            WHERE o.nome LIKE %s OR o.codigo LIKE %s ORDER BY {order_sql}
-        """, (f'%{busca}%', f'%{busca}%'))
-    else:
-        cursor.execute(f"""
-            SELECT o.*, p.nome AS perfil_nome FROM operadores o
-            LEFT JOIN perfil p ON p.id = o.id_perfil
-            ORDER BY {order_sql}
-        """)
+    with get_cursor() as (_, cursor):
+        if busca:
+            cursor.execute(f"""SELECT o.*, p.nome AS perfil_nome, p.cor_bg, p.cor_texto FROM operadores o
+                LEFT JOIN perfil p ON p.id = o.id_perfil
+                WHERE o.nome LIKE %s OR o.codigo LIKE %s ORDER BY {order_sql}""",
+                (f'%{busca}%', f'%{busca}%'))
+        else:
+            cursor.execute(f"""SELECT o.*, p.nome AS perfil_nome, p.cor_bg, p.cor_texto FROM operadores o
+                LEFT JOIN perfil p ON p.id = o.id_perfil ORDER BY {order_sql}""")
+        lista = cursor.fetchall()
+        cursor.execute("SELECT id, nome FROM perfil ORDER BY nome")
+        perfis = cursor.fetchall()
 
-    lista = cursor.fetchall()
-
-    cursor.execute("SELECT id, nome FROM perfil ORDER BY nome")
-    perfis = cursor.fetchall()
-
-    conn.close()
     return render_template('operadores.html', operadores=lista, perfis=perfis,
                            busca=busca, sort=sort, order=order)
 
+
 @app.route('/operadores/editar/<int:id>', methods=['POST'])
+@login_required
 def editar_operador(id):
-    conn = get_db()
-    cursor = conn.cursor()
     dados = (
         request.form.get('nome'), request.form.get('codigo'), request.form.get('telefone'),
         request.form.get('nascimento') or None, request.form.get('endereco'),
@@ -473,96 +476,810 @@ def editar_operador(id):
         request.form.get('status', 'A'), id
     )
     try:
-        sql = """UPDATE operadores SET nome=%s, codigo=%s, telefone=%s, nascimento=%s, endereco=%s,
-                 cidade=%s, uf=%s, cpf=%s, rg=%s, pix=%s, contato=%s, telefone_contato=%s,
-                 id_perfil=%s, status=%s WHERE id=%s"""
-        cursor.execute(sql, dados)
-        conn.commit()
+        with get_cursor(dictionary=False) as (_, cursor):
+            cursor.execute("""UPDATE operadores SET nome=%s, codigo=%s, telefone=%s, nascimento=%s, endereco=%s,
+                cidade=%s, uf=%s, cpf=%s, rg=%s, pix=%s, contato=%s, telefone_contato=%s,
+                id_perfil=%s, status=%s WHERE id=%s""", dados)
     except Exception as e:
         print(f"Erro ao editar operador: {e}")
-        return redirect(url_for('operadores') + '?erro=salvar')
-    finally:
-        conn.close()
-    return redirect(url_for('operadores') + '?ok=salvo')
+        return redirect(url_for('operadores', erro='salvar'))
+    return redirect(url_for('operadores', ok='salvo'))
+
 
 @app.route('/operadores/deletar/<int:id>')
+@login_required
 def deletar_operador(id):
-    if 'usuario_id' not in session: return redirect('/')
-    conn = get_db()
-    cursor = conn.cursor()
     try:
-        cursor.execute("DELETE FROM operadores WHERE id = %s", (id,))
-        conn.commit()
-    finally:
-        conn.close()
-    return redirect(url_for('operadores'))
+        with get_cursor(dictionary=False) as (_, cursor):
+            cursor.execute("DELETE FROM operadores WHERE id = %s", (id,))
+    except Exception as e:
+        print(f"Erro ao deletar operador: {e}")
+        return redirect(url_for('operadores', erro='deletar'))
+    return redirect(url_for('operadores', ok='deletado'))
+
 
 # ************ PERFIL **************************************
 @app.route('/perfil')
+@login_required
+@acesso_rotina_required('perfis')
 def perfil():
-    if not protegido():
-        return redirect('/')
-
-    conn = get_db()
-    cursor = conn.cursor(dictionary=True)
-
     sort  = request.args.get('sort', 'nome')
     order = request.args.get('order', 'asc')
     if sort not in ('nome', 'nivel'): sort = 'nome'
     if order not in ('asc', 'desc'): order = 'asc'
 
-    cursor.execute(f"SELECT * FROM perfil ORDER BY {sort} {order}")
-    perfis = cursor.fetchall()
-    conn.close()
+    with get_cursor() as (_, cursor):
+        cursor.execute(f"SELECT * FROM perfil ORDER BY {sort} {order}")
+        perfis = cursor.fetchall()
 
     return render_template('perfil.html', perfis=perfis, sort=sort, order=order)
 
 
 @app.route('/perfil/salvar', methods=['POST'])
+@login_required
 def salvar_perfil():
-    if not protegido():
-        return redirect('/')
-
     id_perfil = request.form.get('id')
     nome      = request.form.get('nome', '').strip()
     nivel     = request.form.get('nivel') or None
+    cor_bg    = request.form.get('cor_bg', '#e0e7ff')
+    cor_texto = request.form.get('cor_texto', '#1e293b')
 
-    conn = get_db()
-    cursor = conn.cursor()
     try:
-        if id_perfil:
-            cursor.execute("UPDATE perfil SET nome=%s, nivel=%s WHERE id=%s", (nome, nivel, id_perfil))
-        else:
-            cursor.execute("INSERT INTO perfil (nome, nivel) VALUES (%s, %s)", (nome, nivel))
-        conn.commit()
+        with get_cursor(dictionary=False) as (_, cursor):
+            if id_perfil:
+                cursor.execute("UPDATE perfil SET nome=%s, nivel=%s, cor_bg=%s, cor_texto=%s WHERE id=%s", (nome, nivel, cor_bg, cor_texto, id_perfil))
+            else:
+                cursor.execute("INSERT INTO perfil (nome, nivel, cor_bg, cor_texto) VALUES (%s, %s, %s, %s)", (nome, nivel, cor_bg, cor_texto))
     except Exception as e:
         print(f"Erro ao salvar perfil: {e}")
         return redirect('/perfil?erro=salvar')
-    finally:
-        cursor.close()
-        conn.close()
 
     return redirect('/perfil?ok=salvo')
 
 
 @app.route('/perfil/deletar/<int:id>')
+@login_required
 def deletar_perfil(id):
-    if not protegido():
-        return redirect('/')
-
-    conn = get_db()
-    cursor = conn.cursor()
     try:
-        cursor.execute("DELETE FROM perfil WHERE id = %s", (id,))
-        conn.commit()
+        with get_cursor(dictionary=False) as (_, cursor):
+            cursor.execute("DELETE FROM perfil WHERE id = %s", (id,))
     except Exception as e:
         print(f"Erro ao deletar perfil: {e}")
         return redirect('/perfil?erro=deletar')
-    finally:
-        cursor.close()
-        conn.close()
-
     return redirect('/perfil?ok=deletado')
+
+
+# ============================================================
+# PRÊMIOS
+# ============================================================
+
+def _check_senha_eletronica(id_usuario, senha):
+    """Retorna (True, None) se ok, ou (False, motivo) caso contrário."""
+    with get_cursor() as (_, cursor):
+        cursor.execute("SELECT senha_eletronica FROM usuarios WHERE id = %s", (id_usuario,))
+        row = cursor.fetchone()
+    if not row or not row['senha_eletronica']:
+        return False, 'sem_permissao'
+    if not check_password_hash(row['senha_eletronica'], senha):
+        return False, 'senha_invalida'
+    return True, None
+
+
+def _check_permissao_premio(id_usuario, tipo):
+    """tipo: 'incluir' ou 'autorizar'. Retorna True/False."""
+    campo = 'pode_incluir' if tipo == 'incluir' else 'pode_autorizar'
+    with get_cursor() as (_, cursor):
+        cursor.execute(f"SELECT {campo} FROM premios_permissoes WHERE id_usuario = %s", (id_usuario,))
+        row = cursor.fetchone()
+    return bool(row and row[campo])
+
+
+@app.route('/premios')
+@login_required
+@acesso_rotina_required('premios')
+def premios():
+    id_usuario    = session['usuario_id']
+    filtro_status = request.args.get('status', '')
+    order_by      = request.args.get('order_by', 'data_inclusao')
+    order_dir     = request.args.get('order_dir', 'DESC')
+
+    # Validar parâmetros de ordenação para evitar SQL injection
+    colunas_validas = ['id', 'operador_nome', 'tipo', 'quantidade', 'valor', 'periodo', 'data', 'status', 'data_inclusao']
+    if order_by not in colunas_validas:
+        order_by = 'data_inclusao'
+    if order_dir not in ['ASC', 'DESC']:
+        order_dir = 'DESC'
+
+    # Se clicar na mesma coluna, inverte a direção
+    order_col_prefix = 'o.nome' if order_by == 'operador_nome' else f'p.{order_by}'
+
+    with get_cursor() as (_, cursor):
+        cursor.execute("""
+            SELECT COALESCE(pp.pode_incluir, 0)   AS pode_incluir,
+                   COALESCE(pp.pode_autorizar, 0) AS pode_autorizar
+            FROM usuarios u
+            LEFT JOIN premios_permissoes pp ON pp.id_usuario = u.id
+            WHERE u.id = %s
+        """, (id_usuario,))
+        perms = cursor.fetchone() or {'pode_incluir': 0, 'pode_autorizar': 0}
+
+        q = """
+            SELECT p.*,
+                   o.nome  AS operador_nome,
+                   u.nome  AS unidade_nome,
+                   ui.nome AS usuario_inclusao_nome,
+                   ua.nome AS usuario_autorizacao_nome
+            FROM premios p
+            LEFT JOIN operadores o  ON o.id  = p.id_operadores
+            LEFT JOIN unidades   u  ON u.id  = p.id_unidades_pagador
+            LEFT JOIN usuarios   ui ON ui.id = p.id_usuarios
+            LEFT JOIN usuarios   ua ON ua.id = p.id_usuarios_autorizador
+        """
+        params = []
+        if filtro_status:
+            q += " WHERE p.status = %s"
+            params.append(filtro_status)
+        q += f" ORDER BY {order_col_prefix} {order_dir}"
+        cursor.execute(q, params)
+        lista_premios = cursor.fetchall()
+
+        cursor.execute("SELECT id, nome FROM operadores WHERE status='A' ORDER BY nome")
+        operadores = cursor.fetchall()
+        cursor.execute("SELECT id, nome FROM unidades ORDER BY nome")
+        unidades = cursor.fetchall()
+
+    return render_template('premios.html',
+                           premios=lista_premios,
+                           operadores=operadores,
+                           unidades=unidades,
+                           filtro_status=filtro_status,
+                           order_by=order_by,
+                           order_dir=order_dir,
+                           perms=perms)
+
+
+# ===== ENDPOINTS PARA CARREGAMENTO DINÂMICO DE PRÊMIOS =====
+
+@app.route('/premios/operador/<int:id>')
+@login_required
+def premio_operador(id):
+    with get_cursor() as (_, cursor):
+        cursor.execute("SELECT id_perfil FROM operadores WHERE id = %s", (id,))
+        row = cursor.fetchone()
+    if not row:
+        return jsonify({'erro': 'not_found'}), 404
+    return jsonify({'id_perfil': row['id_perfil']})
+
+
+@app.route('/premios/regras/<int:id_perfil>')
+@login_required
+def premio_regras(id_perfil):
+    with get_cursor() as (_, cursor):
+        cursor.execute("""
+            SELECT id, quantidade, tipo, valor, periodo
+            FROM premios_tabela
+            WHERE id_perfil = %s OR id_perfil IS NULL
+            ORDER BY tipo, periodo
+        """, (id_perfil,))
+        regras = cursor.fetchall()
+    return jsonify({'regras': regras})
+
+
+@app.route('/premios/regra/<int:id_regra>')
+@login_required
+def premio_regra(id_regra):
+    with get_cursor() as (_, cursor):
+        cursor.execute("""
+            SELECT id, quantidade, tipo, valor, periodo
+            FROM premios_tabela WHERE id = %s
+        """, (id_regra,))
+        regra = cursor.fetchone()
+    if not regra:
+        return jsonify({'erro': 'not_found'}), 404
+    return jsonify(regra)
+
+
+@app.route('/premios/json/<int:id>')
+@login_required
+def premio_json(id):
+    with get_cursor() as (_, cursor):
+        cursor.execute("SELECT * FROM premios WHERE id = %s", (id,))
+        premio = cursor.fetchone()
+        if not premio:
+            return jsonify({'erro': 'not_found'}), 404
+        cursor.execute("SELECT * FROM premios_rateio WHERE id_premios = %s", (id,))
+        rateio = cursor.fetchall()
+
+    p = dict(premio)
+    for campo in ('data', 'data_inclusao', 'data_autorizacao', 'data_pagamento'):
+        if p.get(campo):
+            p[campo] = str(p[campo])
+    return jsonify({'premio': p, 'rateio': rateio})
+
+
+@app.route('/premios/salvar', methods=['POST'])
+@login_required
+def salvar_premio():
+    id_usuario = session['usuario_id']
+    id_premio  = request.form.get('id') or None
+
+    if not _check_permissao_premio(id_usuario, 'incluir'):
+        return redirect('/premios?erro=sem_permissao')
+
+    if id_premio:
+        with get_cursor() as (_, cursor):
+            cursor.execute("SELECT status FROM premios WHERE id = %s", (id_premio,))
+            row = cursor.fetchone()
+        if not row or row['status'] != 'I':
+            return redirect('/premios?erro=nao_editavel')
+
+    ok, motivo = _check_senha_eletronica(id_usuario, request.form.get('senha_eletronica', ''))
+    if not ok:
+        return jsonify({'erro': motivo}), 400
+
+    id_premios_tabela   = request.form.get('id_regra')
+    id_operadores       = request.form.get('id_operadores')
+    data                = request.form.get('data')
+    id_unidades_pagador = request.form.get('id_unidades_pagador')
+
+    # Validar data
+    from datetime import datetime, date
+    data_obj = datetime.strptime(data, '%Y-%m-%d').date()
+    hoje = date.today()
+
+    if data_obj > hoje:
+        return jsonify({'erro': 'data_futura'}), 400
+
+    if data_obj.weekday() == 6:  # 6 = domingo
+        return jsonify({'erro': 'data_domingo'}), 400
+
+    # Carrega dados da regra (valor, quantidade, tipo, período)
+    with get_cursor() as (_, cursor):
+        cursor.execute("""
+            SELECT quantidade, tipo, valor, periodo
+            FROM premios_tabela WHERE id = %s
+        """, (id_premios_tabela,))
+        regra = cursor.fetchone()
+
+    if not regra:
+        return jsonify({'erro': 'regra_nao_encontrada'}), 400
+
+    tipo          = regra['tipo']
+    valor         = Decimal(str(regra['valor']))
+    quantidade    = int(regra['quantidade'])
+    periodicidade = regra['periodo']
+
+    unidade_ids  = request.form.getlist('id_unidade[]')
+    qtd_unidades = [int(x or 0) for x in request.form.getlist('qtd_unidade[]')]
+
+    pares = [(uid, qtd) for uid, qtd in zip(unidade_ids, qtd_unidades) if qtd > 0]
+    if not pares:
+        return jsonify({'erro': 'rateio_vazio'}), 400
+
+    total_qtd = sum(q for _, q in pares)
+
+    # Valida se rateio bate exatamente com quantidade da tabela
+    if total_qtd != quantidade:
+        return jsonify({'erro': 'rateio_incorreto', 'esperado': quantidade, 'recebido': total_qtd}), 400
+
+    # Rateio proporcional com correção de arredondamento na última parcela
+    valores_rateio = []
+    acumulado = Decimal('0.00')
+    for i, (_, qtd) in enumerate(pares):
+        if i == len(pares) - 1:
+            vr = valor - acumulado
+        else:
+            vr = (valor * Decimal(str(qtd)) / Decimal(str(total_qtd))).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        acumulado += vr
+        valores_rateio.append(vr)
+
+    rateio_flag = 'S' if len(pares) > 1 else 'N'
+
+    try:
+        with get_cursor(dictionary=False) as (_, cursor):
+            if id_premio:
+                cursor.execute("""
+                    UPDATE premios
+                    SET id_operadores=%s, tipo=%s, valor=%s, quantidade=%s,
+                        periodicidade=%s, data=%s, id_unidades_pagador=%s,
+                        rateio=%s, total_premio=%s, id_premios_tabela=%s
+                    WHERE id=%s
+                """, (id_operadores, tipo, float(valor), quantidade,
+                      periodicidade, data, id_unidades_pagador,
+                      rateio_flag, quantidade, id_premios_tabela, id_premio))
+                cursor.execute("DELETE FROM premios_rateio WHERE id_premios = %s", (id_premio,))
+            else:
+                cursor.execute("""
+                    INSERT INTO premios
+                        (id_operadores, tipo, valor, quantidade, periodicidade, data,
+                         id_unidades_pagador, status, rateio, total_premio, id_usuarios, id_premios_tabela)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,'I',%s,%s,%s,%s)
+                """, (id_operadores, tipo, float(valor), quantidade,
+                      periodicidade, data, id_unidades_pagador,
+                      rateio_flag, quantidade, id_usuario, id_premios_tabela))
+                id_premio = cursor.lastrowid
+
+            for (uid, qtd), vr in zip(pares, valores_rateio):
+                cursor.execute("""
+                    INSERT INTO premios_rateio
+                        (id_premios, id_unidades, quantidade, valor, id_unidades_pagador)
+                    VALUES (%s,%s,%s,%s,%s)
+                """, (id_premio, uid, qtd, float(vr), id_unidades_pagador))
+    except Exception as e:
+        import traceback
+        print(f"Erro ao salvar prêmio: {e}")
+        print(f"Traceback: {traceback.format_exc()}")
+        return jsonify({'erro': 'salvar', 'detalhes': str(e)}), 500
+
+    return jsonify({'ok': True})
+
+
+@app.route('/premios/cancelar/<int:id>')
+@login_required
+def cancelar_premio(id):
+    try:
+        with get_cursor(dictionary=False) as (_, cursor):
+            cursor.execute("UPDATE premios SET status='C' WHERE id = %s", (id,))
+    except Exception as e:
+        print(f"Erro ao cancelar prêmio: {e}")
+        return redirect('/premios?erro=cancelar')
+    return redirect('/premios?ok=cancelado')
+
+
+@app.route('/premios/autorizar', methods=['POST'])
+@login_required
+def autorizar_premio():
+    id_usuario = session['usuario_id']
+    id_premio  = request.form.get('id_premio')
+
+    if not _check_permissao_premio(id_usuario, 'autorizar'):
+        return redirect('/premios?erro=sem_permissao')
+
+    ok, motivo = _check_senha_eletronica(id_usuario, request.form.get('senha_eletronica', ''))
+    if not ok:
+        return redirect(f'/premios?erro={motivo}')
+
+    try:
+        with get_cursor(dictionary=False) as (_, cursor):
+            cursor.execute("""
+                UPDATE premios
+                SET status='A', data_autorizacao=NOW(), id_usuarios_autorizador=%s
+                WHERE id=%s AND status='I'
+            """, (id_usuario, id_premio))
+    except Exception as e:
+        print(f"Erro ao autorizar prêmio: {e}")
+        return redirect('/premios?erro=autorizar')
+    return redirect('/premios?ok=autorizado')
+
+
+@app.route('/premios/pagar', methods=['POST'])
+@login_required
+def pagar_premio():
+    id_usuario = session['usuario_id']
+    id_premio  = request.form.get('id_premio')
+    id_unidades_pagador = request.form.get('id_unidades_pagador_pag')
+
+    if not _check_permissao_premio(id_usuario, 'autorizar'):
+        return redirect('/premios?erro=sem_permissao')
+
+    try:
+        with get_cursor(dictionary=False) as (_, cursor):
+            cursor.execute("""
+                UPDATE premios SET status='P', data_pagamento=CURDATE(), id_unidades_pagador=%s
+                WHERE id=%s AND status='A'
+            """, (id_unidades_pagador, id_premio))
+    except Exception as e:
+        print(f"Erro ao registrar pagamento: {e}")
+        return redirect('/premios?erro=pagar')
+    return redirect('/premios?ok=pago')
+
+
+@app.route('/premios/recibo/<int:id>')
+@login_required
+def recibo_premio(id):
+    with get_cursor() as (_, cursor):
+        cursor.execute("""
+            SELECT p.*,
+                   o.nome    AS operador_nome,
+                   u.nome    AS unidade_nome,
+                   u.cidade  AS unidade_cidade
+            FROM premios p
+            LEFT JOIN operadores o ON o.id = p.id_operadores
+            LEFT JOIN unidades   u ON u.id = p.id_unidades_pagador
+            WHERE p.id = %s
+        """, (id,))
+        premio = cursor.fetchone()
+        if not premio:
+            return redirect('/premios?erro=nao_encontrado')
+        cursor.execute("""
+            SELECT r.*, un.nome AS unidade_nome
+            FROM premios_rateio r
+            LEFT JOIN unidades un ON un.id = r.id_unidades
+            WHERE r.id_premios = %s
+        """, (id,))
+        rateio = cursor.fetchall()
+
+    data_impressao = datetime.now().strftime('%d/%m/%Y')
+    return render_template('premios_recibo.html',
+                           premio=premio,
+                           rateio=rateio,
+                           data_impressao=data_impressao)
+
+
+# ===== TABELA DE PRÊMIOS (MANUTENÇÃO) =====
+
+@app.route('/premios_tabela')
+@login_required
+@acesso_rotina_required('premios_tabela')
+def premios_tabela():
+    with get_cursor() as (_, cursor):
+        cursor.execute("""
+            SELECT p.*, pf.nome AS perfil_nome, pf.cor_bg, pf.cor_texto
+            FROM premios_tabela p
+            LEFT JOIN perfil pf ON pf.id = p.id_perfil
+            ORDER BY p.periodo, p.tipo, p.valor
+        """)
+        lista = cursor.fetchall()
+        cursor.execute("SELECT id, nome FROM perfil ORDER BY nome")
+        perfis = cursor.fetchall()
+    return render_template('premios_tabela.html', premios_tabela=lista, perfis=perfis)
+
+
+@app.route('/premios_tabela/salvar', methods=['POST'])
+@login_required
+def salvar_premios_tabela():
+    id_premio = request.form.get('id') or None
+    quantidade = request.form.get('quantidade')
+    tipo = request.form.get('tipo')
+    valor = request.form.get('valor')
+    descricao = request.form.get('descricao', '').strip()
+    periodo = request.form.get('periodo')
+    id_perfil = request.form.get('id_perfil') or None
+
+    try:
+        with get_cursor(dictionary=False) as (_, cursor):
+            if id_premio:
+                cursor.execute("""
+                    UPDATE premios_tabela
+                    SET quantidade=%s, tipo=%s, valor=%s, descricao=%s, periodo=%s, id_perfil=%s
+                    WHERE id=%s
+                """, (quantidade, tipo, valor, descricao, periodo, id_perfil, id_premio))
+            else:
+                cursor.execute("""
+                    INSERT INTO premios_tabela (quantidade, tipo, valor, descricao, periodo, id_perfil)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                """, (quantidade, tipo, valor, descricao, periodo, id_perfil))
+    except Exception as e:
+        print(f"Erro ao salvar premiação: {e}")
+        return redirect('/premios_tabela?erro=salvar')
+
+    return redirect('/premios_tabela?ok=salvo')
+
+
+@app.route('/premios_tabela/deletar/<int:id>')
+@login_required
+def deletar_premios_tabela(id):
+    try:
+        with get_cursor(dictionary=False) as (_, cursor):
+            cursor.execute("DELETE FROM premios_tabela WHERE id = %s", (id,))
+    except Exception as e:
+        print(f"Erro ao deletar premiação: {e}")
+        return redirect('/premios_tabela?erro=deletar')
+    return redirect('/premios_tabela?ok=deletado')
+
+
+# ===== PERMISSÕES DE PRÊMIOS =====
+
+@app.route('/premios/permissoes')
+@login_required
+@acesso_rotina_required('premios_permissoes')
+def premios_permissoes():
+    with get_cursor() as (_, cursor):
+        # Usuários que JÁ têm registro de permissões
+        cursor.execute("""
+            SELECT u.id, u.nome, u.email,
+                   pp.pode_incluir, pp.pode_autorizar,
+                   CASE WHEN u.senha_eletronica IS NOT NULL
+                             AND u.senha_eletronica != ''
+                        THEN 1 ELSE 0 END AS tem_senha_el
+            FROM premios_permissoes pp
+            INNER JOIN usuarios u ON u.id = pp.id_usuario
+            WHERE u.ativo = 'A'
+            ORDER BY u.nome
+        """)
+        usuarios = cursor.fetchall()
+        # Usuários ativos que AINDA NÃO têm permissões (para o modal "Novo")
+        cursor.execute("""
+            SELECT u.id, u.nome
+            FROM usuarios u
+            LEFT JOIN premios_permissoes pp ON pp.id_usuario = u.id
+            WHERE u.ativo = 'A' AND pp.id IS NULL
+            ORDER BY u.nome
+        """)
+        usuarios_sem_perm = cursor.fetchall()
+    return render_template('premios_permissoes.html',
+                           usuarios=usuarios,
+                           usuarios_sem_perm=usuarios_sem_perm)
+
+
+@app.route('/premios/permissoes/salvar', methods=['POST'])
+@login_required
+def salvar_premios_permissoes():
+    print("=== INICIANDO salvar_premios_permissoes ===")
+    id_usuario     = request.form.get('id_usuario')
+    pode_incluir   = 1 if request.form.get('pode_incluir')   else 0
+    pode_autorizar = 1 if request.form.get('pode_autorizar') else 0
+    senha_antiga   = request.form.get('senha_antiga',   '').strip()
+    senha_nova     = request.form.get('senha_nova',     '').strip()
+    senha_confirma = request.form.get('senha_confirma', '').strip()
+    print(f"id_usuario={id_usuario}, pode_incluir={pode_incluir}, pode_autorizar={pode_autorizar}")
+    print(f"senha_nova={bool(senha_nova)}, senha_confirma={bool(senha_confirma)}")
+
+    # Valida senhas ANTES de gravar qualquer coisa
+    hash_novo = None
+    if senha_nova:
+        if senha_nova != senha_confirma:
+            return redirect('/premios/permissoes?erro=senha_confirma')
+        with get_cursor() as (_, cursor):
+            cursor.execute("SELECT senha_eletronica FROM usuarios WHERE id = %s", (id_usuario,))
+            row = cursor.fetchone()
+        if row and row['senha_eletronica']:
+            if not senha_antiga:
+                return redirect('/premios/permissoes?erro=senha_antiga_obrigatoria')
+            if not check_password_hash(row['senha_eletronica'], senha_antiga):
+                return redirect('/premios/permissoes?erro=senha_antiga_incorreta')
+        hash_novo = generate_password_hash(senha_nova)
+
+    try:
+        with get_cursor(dictionary=False) as (_, cursor):
+            cursor.execute("""
+                INSERT INTO premios_permissoes (id_usuario, pode_incluir, pode_autorizar)
+                VALUES (%s, %s, %s)
+                ON DUPLICATE KEY UPDATE pode_incluir=%s, pode_autorizar=%s
+            """, (id_usuario, pode_incluir, pode_autorizar, pode_incluir, pode_autorizar))
+            if hash_novo:
+                cursor.execute(
+                    "UPDATE usuarios SET senha_eletronica=%s WHERE id=%s",
+                    (hash_novo, id_usuario)
+                )
+    except Exception as e:
+        import traceback
+        print(f"ERRO DETALHADO ao salvar permissões:")
+        print(f"Tipo: {type(e).__name__}")
+        print(f"Mensagem: {e}")
+        print(f"Traceback: {traceback.format_exc()}")
+        return redirect('/premios/permissoes?erro=salvar')
+
+    return redirect('/premios/permissoes?ok=salvo')
+
+
+# ===== CONTROLE DE ACESSO ÀS ROTINAS =====
+
+def verificar_acesso_alteracao(id_usuario, nome_rotina):
+    """Verifica se o usuário tem acesso de ALTERAÇÃO (não apenas leitura)"""
+    id_rotina = get_rotina_id(nome_rotina)
+    if not id_rotina:
+        return False
+    try:
+        with get_cursor() as (_, cursor):
+            cursor.execute("""
+                SELECT acesso FROM rotinas_acesso ra
+                JOIN perfil p ON p.id = ra.id_perfil
+                JOIN usuarios u ON u.id_perfil = p.id
+                WHERE u.id = %s AND ra.id_rotinas = %s
+            """, (id_usuario, id_rotina))
+            resultado = cursor.fetchone()
+            return resultado and resultado['acesso'] == 'A'
+    except Exception as e:
+        print(f"[AVISO] Erro ao verificar acesso de alteração: {e}")
+        return False
+
+
+def verificar_acesso_rotina(id_usuario, id_rotina):
+    """
+    Verifica o acesso do usuário a uma rotina específica.
+    Retorna: 'A' (Alteracao), 'L' (Leitura), None (Sem acesso)
+    """
+    try:
+        with get_cursor() as (_, cursor):
+            # Busca o perfil do usuário
+            cursor.execute("SELECT id_perfil FROM usuarios WHERE id = %s", (id_usuario,))
+            usuario = cursor.fetchone()
+
+            if not usuario or not usuario['id_perfil']:
+                print(f"[AVISO] Usuario {id_usuario} sem perfil definido")
+                return None
+
+            id_perfil = usuario['id_perfil']
+
+            # Busca acesso específico para essa rotina
+            cursor.execute("""
+                SELECT acesso FROM rotinas_acesso
+                WHERE id_perfil = %s AND id_rotinas = %s
+            """, (id_perfil, id_rotina))
+
+            result = cursor.fetchone()
+            acesso = result['acesso'] if result else None
+            print(f"[OK] Acesso do usuario {id_usuario} rotina {id_rotina}: {acesso}")
+            return acesso
+    except Exception as e:
+        print(f"[AVISO] Erro ao verificar acesso rotina {id_rotina}: {e}")
+        return None
+
+
+def obter_rotinas_acesso_usuario(id_usuario):
+    """
+    Obtém lista de IDs de rotinas que o usuário tem acesso (verde ou amarelo).
+    Se houver erro ou sem dados, retorna lista vazia (fallback será permitir acesso).
+    """
+    try:
+        with get_cursor() as (_, cursor):
+            # Busca rotinas do usuário via seu perfil
+            cursor.execute("""
+                SELECT DISTINCT ra.id_rotinas
+                FROM rotinas_acesso ra
+                JOIN perfil p ON p.id = ra.id_perfil
+                JOIN usuarios u ON u.id_perfil = p.id
+                WHERE u.id = %s AND ra.acesso IN ('A', 'L')
+            """, (id_usuario,))
+            resultado = [row['id_rotinas'] for row in cursor.fetchall()]
+            print(f"[OK] Rotinas do usuario {id_usuario}: {resultado}")
+            return resultado
+    except Exception as e:
+        print(f"[AVISO] Erro ao obter rotinas (banco vazio ou tabela nao existe): {e}")
+        return []  # Retorna vazio, menu mostrará tudo
+
+
+@app.route('/rotinas/permissoes')
+@login_required
+def rotinas_permissoes():
+    """Página de gerenciamento de permissões de rotinas por perfil"""
+    try:
+        # Parâmetros de ordenação
+        sort = request.args.get('sort', 'rotina')
+        order = request.args.get('order', 'asc')
+        if sort not in ('rotina', 'descricao'):
+            sort = 'rotina'
+        if order not in ('asc', 'desc'):
+            order = 'asc'
+
+        with get_cursor() as (_, cursor):
+            # Busca todos os perfis
+            try:
+                print("[TENTANDO] SELECT id, nome FROM perfil")
+                cursor.execute("SELECT id, nome FROM perfil ORDER BY nome")
+                perfis = cursor.fetchall()
+                print(f"[OK] Perfis carregados: {len(perfis)}")
+            except Exception as e_perfis:
+                print(f"[ERRO PERFIS] {e_perfis}")
+                raise
+
+            # Busca TODAS as rotinas com ordenação
+            try:
+                print("[TENTANDO] SELECT * FROM rotinas")
+                cursor.execute(f"SELECT * FROM rotinas ORDER BY {sort} {order}")
+                rotinas_raw = cursor.fetchall()
+
+                # Debug: mostra as colunas da tabela rotinas
+                if rotinas_raw:
+                    colunas = list(rotinas_raw[0].keys())
+                    print(f"[DEBUG] Colunas da tabela rotinas: {colunas}")
+
+                # Converte para formato esperado (id, rotina, descricao)
+                rotinas = []
+                for r in rotinas_raw:
+                    rotinas.append({
+                        'id': r.get('id'),
+                        'nome': r.get('rotina') or '',
+                        'descricao': r.get('descricao') or ''
+                    })
+
+                print(f"[OK] Rotinas carregadas: {len(rotinas)}")
+            except Exception as e_rotinas:
+                print(f"[ERRO ROTINAS] {e_rotinas}")
+                import traceback
+                traceback.print_exc()
+                raise
+
+            # Busca permissões (por perfil, se houver seleção)
+            id_perfil = request.args.get('id_perfil')
+            permissoes = {}
+            if id_perfil:
+                try:
+                    print(f"[TENTANDO] SELECT permissoes para perfil {id_perfil}")
+                    cursor.execute("""
+                        SELECT id_rotinas, acesso
+                        FROM rotinas_acesso
+                        WHERE id_perfil = %s
+                    """, (id_perfil,))
+                    for row in cursor.fetchall():
+                        permissoes[row['id_rotinas']] = row['acesso']
+                    print(f"[OK] Permissoes do perfil {id_perfil}: {len(permissoes)}")
+                except Exception as e_perm:
+                    print(f"[ERRO PERMISSOES] {e_perm}")
+                    raise
+
+        return render_template(
+            'rotinas_permissoes.html',
+            perfis=perfis,
+            rotinas=rotinas,
+            permissoes=permissoes,
+            perfil_selecionado=int(id_perfil) if id_perfil else None,
+            sort=sort,
+            order=order
+        )
+    except Exception as e:
+        print(f"[ERRO GERAL] Erro ao carregar rotinas/permissoes: {e}")
+        import traceback
+        traceback.print_exc()
+        return render_template(
+            'rotinas_permissoes.html',
+            perfis=[],
+            rotinas=[],
+            permissoes={},
+            perfil_selecionado=None,
+            sort=request.args.get('sort', 'rotina'),
+            order=request.args.get('order', 'asc'),
+            erro=f"Erro ao carregar dados: {str(e)}"
+        )
+
+
+@app.route('/rotinas/permissoes/salvar', methods=['POST'])
+@login_required
+def salvar_rotinas_permissoes():
+    """Salva permissões de rotinas para um perfil"""
+    try:
+        id_perfil = request.form.get('id_perfil')
+
+        with get_cursor(dictionary=False) as (conn, cursor):
+            # Processa cada rotina
+            for key in request.form:
+                if key.startswith('acesso_'):
+                    id_rotina = key.replace('acesso_', '')
+                    acesso = request.form.get(key)
+
+                    # Verifica se já existe
+                    cursor.execute(
+                        "SELECT id FROM rotinas_acesso WHERE id_perfil = %s AND id_rotinas = %s",
+                        (id_perfil, id_rotina)
+                    )
+                    existe = cursor.fetchone()
+
+                    if acesso == 'V':  # Vermelho - sem acesso
+                        if existe:
+                            cursor.execute(
+                                "DELETE FROM rotinas_acesso WHERE id_perfil = %s AND id_rotinas = %s",
+                                (id_perfil, id_rotina)
+                            )
+                    else:  # Verde ('A') ou Amarelo ('L')
+                        valor_acesso = 'A' if acesso == 'G' else 'L'
+                        if existe:
+                            cursor.execute(
+                                "UPDATE rotinas_acesso SET acesso = %s WHERE id_perfil = %s AND id_rotinas = %s",
+                                (valor_acesso, id_perfil, id_rotina)
+                            )
+                        else:
+                            cursor.execute(
+                                "INSERT INTO rotinas_acesso (id_perfil, id_rotinas, acesso) VALUES (%s, %s, %s)",
+                                (id_perfil, id_rotina, valor_acesso)
+                            )
+            conn.commit()
+
+        # Atualizar sessão se o usuário logado é do perfil editado
+        if 'usuario_id' in session:
+            with get_cursor() as (_, cursor):
+                cursor.execute("SELECT id_perfil FROM usuarios WHERE id = %s", (session['usuario_id'],))
+                resultado = cursor.fetchone()
+                if resultado and str(resultado['id_perfil']) == str(id_perfil):
+                    # Recarrega as rotinas na sessão
+                    rotinas_acesso = obter_rotinas_acesso_usuario(session['usuario_id'])
+                    session['rotinas_acesso'] = rotinas_acesso
+                    print(f"[OK] Sessão do usuário {session['usuario_id']} atualizada: {rotinas_acesso}")
+    except Exception as e:
+        print(f"Erro ao salvar permissões: {e}")
+        return redirect(f'/rotinas/permissoes?id_perfil={id_perfil}&erro=salvar')
+
+    return redirect(f'/rotinas/permissoes?id_perfil={id_perfil}&ok=salvo')
 
 
 if __name__ == '__main__':

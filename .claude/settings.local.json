@@ -1,7 +1,14 @@
 {
   "permissions": {
     "allow": [
-      "Bash(python -c ':*)"
+      "Bash(python -c ':*)",
+      "Bash(python)",
+      "Bash(pkill -f \"python app.py\")",
+      "Bash(python app.py)",
+      "Bash(taskkill /IM python.exe /F)",
+      "Bash(python3 -c ':*)",
+      "Bash(mysql -h localhost -u root -padmin bms -e \"SELECT id, nome FROM rotinas ORDER BY id;\")",
+      "Bash(python3)"
     ]
   }
 }

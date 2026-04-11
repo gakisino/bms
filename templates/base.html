@@ -72,6 +72,45 @@
         .menu-item.active { background: #4f46e5; color: white; border-right: 3px solid #818cf8; }
         .menu-item.active:hover { background: #4338ca; }
 
+        /* Submenu */
+        .menu-category {
+            display: flex;
+            align-items: center;
+            padding: 12px 25px;
+            color: #cbd5e1;
+            gap: 15px;
+            cursor: pointer;
+            transition: 0.2s;
+            white-space: nowrap;
+            user-select: none;
+        }
+        .menu-category:hover { background: #334155; color: white; }
+        .menu-category i { width: 22px; height: 22px; min-width: 22px; min-height: 22px; flex-shrink: 0; }
+        .menu-category .chevron { transition: transform 0.3s; }
+        .menu-category.open .chevron { transform: rotate(180deg); }
+
+        .submenu {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+            background: #0f172a;
+        }
+        .submenu.open { max-height: 500px; }
+
+        .submenu-item {
+            display: flex;
+            align-items: center;
+            padding: 10px 25px 10px 50px;
+            color: #94a3b8;
+            text-decoration: none;
+            gap: 10px;
+            transition: 0.2s;
+            white-space: nowrap;
+            font-size: 14px;
+        }
+        .submenu-item:hover { background: #334155; color: white; }
+        .submenu-item.active { color: #a5f3fc; background: #1e293b; border-left: 3px solid #06b6d4; padding-left: 47px; }
+
         .logout-area { border-top: 1px solid #334155; padding: 10px 0; flex-shrink: 0; width: 100%; }
 
         /* Toast */
@@ -99,6 +138,10 @@
 
         #toggle-sidebar:checked + .layout .menu-item { padding: 12px 0; justify-content: center; gap: 0; }
         #toggle-sidebar:checked + .layout .logout-area .menu-item { padding: 12px 0; justify-content: center; gap: 0; }
+        #toggle-sidebar:checked + .layout .menu-category { padding: 12px 0; justify-content: center; gap: 0; }
+        #toggle-sidebar:checked + .layout .menu-category .menu-text,
+        #toggle-sidebar:checked + .layout .menu-category .chevron { display: none; }
+        #toggle-sidebar:checked + .layout .submenu { display: none; }
 
         /* Tooltip ao recolher */
         #sidebar-tooltip {
@@ -133,6 +176,7 @@
             justify-content: space-between;
             padding: 0 30px;
             border-bottom: 1px solid #e2e8f0;
+            position: relative;
         }
 
         .toggle-btn { font-size: 24px; cursor: pointer; color: #64748b; }
@@ -142,6 +186,11 @@
         .label-form { display: block; font-size: 11px; font-weight: bold; color: #64748b; margin-bottom: 5px; text-transform: uppercase; }
         .input-form { width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px; outline: none; }
         .input-form:focus { border-color: #4f46e5; }
+
+        /* Animação para flash messages */
+        @keyframes slideOut {
+            to { opacity: 0; transform: translateY(-20px); }
+        }
     </style>
 </head>
 <body>
@@ -156,12 +205,36 @@
         </div>
 
         <nav class="menu">
-            <a href="/dashboard"   class="menu-item" data-tooltip="Dashboard"><i data-lucide="layout-dashboard"></i> <span class="menu-text">Dashboard</span></a>
-            <a href="/usuarios"    class="menu-item" data-tooltip="Usuários"><i data-lucide="users"></i> <span class="menu-text">Usuários</span></a>
-            <a href="/perfil"      class="menu-item" data-tooltip="Perfis"><i data-lucide="shield-check"></i> <span class="menu-text">Perfis</span></a>
-            <a href="/operadores"  class="menu-item" data-tooltip="Operadores"><i data-lucide="user-cog"></i> <span class="menu-text">Operadores</span></a>
-            <a href="/agendamento" class="menu-item" data-tooltip="Agendamento"><i data-lucide="calendar"></i> <span class="menu-text">Agendamento</span></a>
             <a href="/agenda"      class="menu-item" data-tooltip="Agenda"><i data-lucide="calendar-days"></i> <span class="menu-text">Agenda</span></a>
+            <a href="/dashboard"   class="menu-item" data-tooltip="Dashboard"><i data-lucide="layout-dashboard"></i> <span class="menu-text">Dashboard</span></a>
+            <a href="/agendamento" class="menu-item" data-tooltip="Agendamento"><i data-lucide="calendar"></i> <span class="menu-text">Agendamento</span></a>
+            <a href="/premios"     class="menu-item" data-tooltip="Prêmios"><i data-lucide="trophy"></i> <span class="menu-text">Prêmios</span></a>
+
+            <div class="menu-category" onclick="toggleSubmenu(this)" data-tooltip="Configurações">
+                <i data-lucide="settings"></i>
+                <span class="menu-text">Configurações</span>
+                <i class="chevron" data-lucide="chevron-down" style="margin-left: auto; width: 18px; height: 18px;"></i>
+            </div>
+            <div class="submenu">
+                {% if not rotinas_acesso or get_rotina_id('usuarios') in rotinas_acesso %}
+                <a href="/usuarios"           class="submenu-item" data-tooltip="Usuários"><i data-lucide="users" style="width:18px; height:18px;"></i> <span class="menu-text">Usuários</span></a>
+                {% endif %}
+                {% if not rotinas_acesso or get_rotina_id('perfis') in rotinas_acesso %}
+                <a href="/perfil"            class="submenu-item" data-tooltip="Perfis"><i data-lucide="shield-check" style="width:18px; height:18px;"></i> <span class="menu-text">Perfis</span></a>
+                {% endif %}
+                {% if not rotinas_acesso or get_rotina_id('operadores') in rotinas_acesso %}
+                <a href="/operadores"        class="submenu-item" data-tooltip="Operadores"><i data-lucide="user-cog" style="width:18px; height:18px;"></i> <span class="menu-text">Operadores</span></a>
+                {% endif %}
+                {% if not rotinas_acesso or get_rotina_id('premios_permissoes') in rotinas_acesso %}
+                <a href="/premios/permissoes" class="submenu-item" data-tooltip="Permissões"><i data-lucide="lock" style="width:18px; height:18px;"></i> <span class="menu-text">Permissões Prêmios</span></a>
+                {% endif %}
+                {% if not rotinas_acesso or get_rotina_id('premios_tabela') in rotinas_acesso %}
+                <a href="/premios_tabela"    class="submenu-item" data-tooltip="Tabela"><i data-lucide="list" style="width:18px; height:18px;"></i> <span class="menu-text">Tabela de Prêmios</span></a>
+                {% endif %}
+                {% if not rotinas_acesso or get_rotina_id('rotinas') in rotinas_acesso %}
+                <a href="/rotinas/permissoes" class="submenu-item" data-tooltip="Rotinas"><i data-lucide="shield-alert" style="width:18px; height:18px;"></i> <span class="menu-text">Acesso às Rotinas</span></a>
+                {% endif %}
+            </div>
         </nav>
 
         <div class="logout-area">
@@ -172,12 +245,29 @@
     <div class="main">
         <header class="topbar">
             <label for="toggle-sidebar" class="toggle-btn">☰</label>
-            <div class="user-info" style="text-align: right;">
-                <strong>{{ session['usuario_nome'] }}</strong><br>
-                <small style="color: #64748b;">{{ session['usuario_email'] }}</small>
+
+            <div style="position: absolute; left: 50%; transform: translateX(-50%); text-align: center;">
+                <span style="font-size: 17px; font-weight: 700; color: #1e293b; letter-spacing: 0.5px;">Intranet BMS</span>
+            </div>
+
+            <div style="text-align: right; line-height: 1.4;">
+                <strong style="color: #1e293b; font-size: 14px;">{{ session['usuario_nome'] }}</strong><br>
+                <small style="color: #64748b;">{{ session['usuario_email'] }}</small><br>
+                <a href="/logout" title="Sair" style="display:inline-flex; align-items:center; gap:4px; color:#ef4444; font-size:12px; font-weight:600; text-decoration:none; margin-top:2px;">
+                    <i data-lucide="log-out" style="width:13px; height:13px;"></i> Sair
+                </a>
             </div>
         </header>
         <div class="content">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                    <div class="flash-message" style="margin-bottom:20px; padding:15px; border-radius:8px; border-left:4px solid {% if category == 'erro' %}#ef4444{% elif category == 'sucesso' %}#10b981{% else %}#3b82f6{% endif %}; background:{% if category == 'erro' %}#fee2e2{% elif category == 'sucesso' %}#d1fae5{% else %}#dbeafe{% endif %}; color:{% if category == 'erro' %}#991b1b{% elif category == 'sucesso' %}#065f46{% else %}#1e40af{% endif %}; animation: slideOut 0.3s ease forwards; animation-delay: 5s;">
+                        {{ message }}
+                    </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
             {% block content %}{% endblock %}
         </div>
     </div>
@@ -233,6 +323,13 @@
         setTimeout(function() { toast.classList.remove('show'); }, 3500);
     }
 
+    // Toggle submenu
+    function toggleSubmenu(element) {
+        const submenu = element.nextElementSibling;
+        element.classList.toggle('open');
+        submenu.classList.toggle('open');
+    }
+
     document.addEventListener("DOMContentLoaded", function() {
         lucide.createIcons();
 
@@ -240,6 +337,18 @@
         const path = window.location.pathname;
         document.querySelectorAll('.menu-item[href]').forEach(function(item) {
             if (item.getAttribute('href') === path) item.classList.add('active');
+        });
+
+        // Submenu item ativo
+        document.querySelectorAll('.submenu-item[href]').forEach(function(item) {
+            if (item.getAttribute('href') === path) {
+                item.classList.add('active');
+                // Abre submenu automaticamente se estiver em uma página do submenu
+                const submenu = item.closest('.submenu');
+                const category = submenu.previousElementSibling;
+                category.classList.add('open');
+                submenu.classList.add('open');
+            }
         });
 
         // Toast via query string
@@ -250,6 +359,23 @@
         if (params.get('erro') === 'senha_antiga') showToast('Senha antiga não confere.', 'erro');
         if (params.get('erro') === 'salvar')       showToast('Erro ao salvar. Tente novamente.', 'erro');
         if (params.get('erro') === 'deletar')      showToast('Erro ao excluir. Verifique os vínculos.', 'erro');
+        if (params.get('ok')    === 'autorizado')    showToast('Prêmio autorizado com sucesso!', 'sucesso');
+        if (params.get('ok')    === 'pago')          showToast('Pagamento registrado com sucesso!', 'sucesso');
+        if (params.get('ok')    === 'cancelado')     showToast('Prêmio cancelado.', 'aviso');
+        if (params.get('erro')  === 'sem_permissao') showToast('Sem permissão para esta operação.', 'erro');
+        if (params.get('erro')  === 'senha_invalida') showToast('Senha eletrônica inválida.', 'erro');
+        if (params.get('erro')  === 'rateio_vazio')  showToast('Informe a distribuição por unidade.', 'erro');
+        if (params.get('erro')  === 'nao_editavel')  showToast('Prêmio não pode ser editado neste status.', 'erro');
+        if (params.get('erro')  === 'autorizar')     showToast('Erro ao autorizar o prêmio.', 'erro');
+        if (params.get('erro')  === 'cancelar')      showToast('Erro ao cancelar o prêmio.', 'erro');
+        if (params.get('erro')  === 'pagar')              showToast('Erro ao registrar pagamento.', 'erro');
+        if (params.get('erro')  === 'senha_confirma')     showToast('Nova senha e confirmação não conferem.', 'erro');
+        if (params.get('erro')  === 'senha_antiga_obrigatoria') showToast('Informe a senha eletrônica atual.', 'erro');
+        if (params.get('erro')  === 'senha_antiga_incorreta')   showToast('Senha eletrônica atual incorreta.', 'erro');
+        if (params.get('ok')    === 'salvo')                    showToast('Registro salvo com sucesso!', 'sucesso');
+        if (params.get('ok')    === 'deletado')                 showToast('Registro excluído com sucesso!', 'sucesso');
+        if (params.get('erro')  === 'salvar')                   showToast('Erro ao salvar. Tente novamente.', 'erro');
+        if (params.get('erro')  === 'deletar')                  showToast('Erro ao excluir. Verifique os vínculos.', 'erro');
 
         const checkbox = document.getElementById('toggle-sidebar');
         const savedState = localStorage.getItem('sidebar-collapsed');
@@ -260,7 +386,8 @@
 
         // Tooltip do sidebar recolhido
         const tooltip = document.getElementById('sidebar-tooltip');
-        document.querySelectorAll('.menu-item[data-tooltip]').forEach(function(item) {
+        const tooltipElements = document.querySelectorAll('.menu-item[data-tooltip], .menu-category[data-tooltip], .submenu-item[data-tooltip]');
+        tooltipElements.forEach(function(item) {
             item.addEventListener('mouseenter', function() {
                 if (!checkbox.checked) return;
                 const rect = item.getBoundingClientRect();
