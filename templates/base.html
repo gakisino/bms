@@ -325,6 +325,12 @@
 
     // Toggle submenu
     function toggleSubmenu(element) {
+        // Se sidebar está recolhido, expandir primeiro
+        const checkbox = document.getElementById('toggle-sidebar');
+        if (checkbox.checked) {
+            checkbox.checked = false;
+        }
+
         const submenu = element.nextElementSibling;
         element.classList.toggle('open');
         submenu.classList.toggle('open');
