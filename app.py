@@ -6,6 +6,7 @@ from flask import Flask, render_template, request, redirect, url_for, session, f
 from werkzeug.security import check_password_hash, generate_password_hash
 from datetime import date, datetime
 import mysql.connector
+import os
 
 app = Flask(__name__)
 app.secret_key = "segredo_super_secreto"
@@ -15,10 +16,12 @@ ROTINAS_CACHE = {}
 
 def get_db():
     return mysql.connector.connect(
-        host="localhost",
-        user="root",
-        password="admin",
-        database="bms"
+        # O os.getenv tenta ler a variável do servidor. 
+        # Se não existir (no seu PC), ele usa o que está depois da vírgula.
+        host=os.getenv('DB_HOST', 'localhost'),
+        user=os.getenv('DB_USER', 'root'),
+        password=os.getenv('DB_PASSWORD', 'admin'),
+        database=os.getenv('DB_DATABASE', 'bms')
     )
 
 @contextmanager
