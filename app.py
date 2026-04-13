@@ -203,13 +203,27 @@ def login():
 @app.route('/agendamento')
 @login_required
 def agendamento():
+    sort = request.args.get('sort', 'data')
+    order = request.args.get('order', 'asc')
+
+    if sort not in ('data', 'hora', 'nome', 'responsavel', 'id_operadores', 'unidades_id'):
+        sort = 'data'
+    if order not in ('asc', 'desc'):
+        order = 'asc'
+
     with get_cursor() as (_, cursor):
-        cursor.execute("""
-            SELECT a.*, u.nome as unidade_nome, o.nome as operador_nome
+        # Monta ORDER BY: campo escolhido + data + hora
+        order_by = f"a.{sort} {order}, a.data ASC, a.hora ASC"
+        cursor.execute(f"""
+            SELECT a.id, a.data, a.hora, a.nome, a.telefone, a.idade, a.responsavel, a.observacao,
+                   a.unidades_id, a.id_operadores,
+                   COALESCE(a.confirmacao, 'N') as confirmado,
+                   COALESCE(a.compareceu, 'N') as compareceu,
+                   u.nome as unidade_nome, u.sigla as unidade_sigla, o.nome as operador_nome
             FROM agendamento a
             LEFT JOIN unidades u ON a.unidades_id = u.id
             LEFT JOIN operadores o ON a.id_operadores = o.id
-            ORDER BY a.data DESC, a.hora DESC
+            ORDER BY {order_by}
         """)
         lista_agendamentos = cursor.fetchall()
         cursor.execute("SELECT id, nome FROM operadores ORDER BY nome")
@@ -220,7 +234,9 @@ def agendamento():
     return render_template('agendamento.html',
                            agendamentos=lista_agendamentos,
                            operadores=lista_operadores,
-                           unidades=lista_unidades)
+                           unidades=lista_unidades,
+                           sort=sort,
+                           order=order)
 
 
 # 💾 SALVAR AGENDAMENTO
@@ -235,23 +251,22 @@ def salvar_agendamento():
     operador    = request.form.get('id_operadores') or None
     idade       = request.form.get('idade')
     responsavel = request.form.get('responsavel')
-    telefone    = request.form.get('telefone')
-    confirmado  = 1 if request.form.get('confirmado') else 0
-    compareceu  = 1 if request.form.get('compareceu') else 0
+    telefone    = re.sub(r'\D', '', request.form.get('telefone', ''))  # Remove máscara
+    observacao  = request.form.get('observacao')
 
     try:
         with get_cursor(dictionary=False) as (_, cursor):
             if id_ag:
                 cursor.execute("""UPDATE agendamento SET
                     nome=%s, data=%s, hora=%s, unidades_id=%s, id_operadores=%s,
-                    idade=%s, responsavel=%s, telefone=%s, confirmacao=%s, compareceu=%s
+                    idade=%s, responsavel=%s, telefone=%s, observacao=%s
                     WHERE id=%s""",
-                    (nome, data, hora, unidade, operador, idade, responsavel, telefone, confirmado, compareceu, id_ag))
+                    (nome, data, hora, unidade, operador, idade, responsavel, telefone, observacao, id_ag))
             else:
                 cursor.execute("""INSERT INTO agendamento
-                    (nome, data, hora, unidades_id, id_operadores, idade, responsavel, telefone, confirmacao, compareceu)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
-                    (nome, data, hora, unidade, operador, idade, responsavel, telefone, confirmado, compareceu))
+                    (nome, data, hora, unidades_id, id_operadores, idade, responsavel, telefone, observacao)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                    (nome, data, hora, unidade, operador, idade, responsavel, telefone, observacao))
     except Exception as e:
         print(f"ERRO AO SALVAR AGENDAMENTO: {e}")
         return redirect('/agendamento?erro=salvar')
@@ -322,6 +337,30 @@ def deletar_agendamento(id):
     with get_cursor(dictionary=False) as (_, cursor):
         cursor.execute("DELETE FROM agendamento WHERE id = %s", (id,))
     return redirect('/agendamento?ok=deletado')
+
+
+# ✅ TOGGLE CONFIRMAÇÃO
+@app.route('/agendamento/toggle-confirmacao', methods=['POST'])
+@login_required
+def toggle_confirmacao():
+    id_ag = request.form.get('id')
+    confirmacao = request.form.get('confirmacao')
+
+    with get_cursor(dictionary=False) as (_, cursor):
+        cursor.execute("UPDATE agendamento SET confirmacao = %s WHERE id = %s", (confirmacao, id_ag))
+    return jsonify({'status': 'ok'})
+
+
+# ✅ TOGGLE COMPARECEU
+@app.route('/agendamento/toggle-compareceu', methods=['POST'])
+@login_required
+def toggle_compareceu():
+    id_ag = request.form.get('id')
+    compareceu = request.form.get('compareceu')
+
+    with get_cursor(dictionary=False) as (_, cursor):
+        cursor.execute("UPDATE agendamento SET compareceu = %s WHERE id = %s", (compareceu, id_ag))
+    return jsonify({'status': 'ok'})
 
 
 # 📆 AGENDA

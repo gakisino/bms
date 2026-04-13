@@ -14,11 +14,24 @@
             --sidebar-collapsed: 80px;
             --bg-sidebar: #1e293b;
             --bg-main: #f8fafc;
+            --bg-content: #ffffff;
+            --text-primary: #1e293b;
+            --text-secondary: #64748b;
+            --border-color: #e2e8f0;
             --transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
+        :root.dark-mode {
+            --bg-sidebar: #0f172a;
+            --bg-main: #0f172a;
+            --bg-content: #1e293b;
+            --text-primary: #f1f5f9;
+            --text-secondary: #cbd5e1;
+            --border-color: #334155;
+        }
+
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Inter', sans-serif; background: var(--bg-main); overflow-x: hidden; }
+        body { font-family: 'Inter', sans-serif; background: var(--bg-main); overflow-x: hidden; color: var(--text-primary); transition: background-color 0.3s, color 0.3s; }
 
         .layout { display: flex; width: 100%; }
 
@@ -169,13 +182,13 @@
         }
 
         .topbar {
-            background: white;
+            background: var(--bg-content);
             height: 70px;
             display: flex;
             align-items: center;
             justify-content: space-between;
             padding: 0 30px;
-            border-bottom: 1px solid #e2e8f0;
+            border-bottom: 1px solid var(--border-color);
             position: relative;
         }
 
@@ -194,6 +207,14 @@
     </style>
 </head>
 <body>
+
+<script>
+    // Carregar tema imediatamente para evitar flash
+    const theme = localStorage.getItem('theme') || 'light';
+    if (theme === 'dark') {
+        document.documentElement.classList.add('dark-mode');
+    }
+</script>
 
 <input type="checkbox" id="toggle-sidebar" style="display: none;">
 
@@ -250,12 +271,17 @@
                 <span style="font-size: 17px; font-weight: 700; color: #1e293b; letter-spacing: 0.5px;">Intranet BMS</span>
             </div>
 
-            <div style="text-align: right; line-height: 1.4;">
-                <strong style="color: #1e293b; font-size: 14px;">{{ session['usuario_nome'] }}</strong><br>
-                <small style="color: #64748b;">{{ session['usuario_email'] }}</small><br>
-                <a href="/logout" title="Sair" style="display:inline-flex; align-items:center; gap:4px; color:#ef4444; font-size:12px; font-weight:600; text-decoration:none; margin-top:2px;">
-                    <i data-lucide="log-out" style="width:13px; height:13px;"></i> Sair
-                </a>
+            <div style="text-align: right; line-height: 1.4; display:flex; align-items:center; gap:15px;">
+                <button onclick="toggleDarkMode()" title="Alternar Dark Mode" style="background:none; border:none; cursor:pointer; padding:8px; border-radius:8px; transition:0.2s; display:flex; align-items:center;">
+                    <i id="theme-icon" data-lucide="moon" style="width:20px; height:20px; color:#64748b;"></i>
+                </button>
+                <div>
+                    <strong style="color:#1e293b; font-size: 14px;">{{ session['usuario_nome'] }}</strong><br>
+                    <small style="color:#64748b;">{{ session['usuario_email'] }}</small><br>
+                    <a href="/logout" title="Sair" style="display:inline-flex; align-items:center; gap:4px; color:#ef4444; font-size:12px; font-weight:600; text-decoration:none; margin-top:2px;">
+                        <i data-lucide="log-out" style="width:13px; height:13px;"></i> Sair
+                    </a>
+                </div>
             </div>
         </header>
         <div class="content">
@@ -323,6 +349,23 @@
         setTimeout(function() { toast.classList.remove('show'); }, 3500);
     }
 
+    // Toggle dark mode
+    function toggleDarkMode() {
+        const html = document.documentElement;
+        const isDark = html.classList.contains('dark-mode');
+
+        if (isDark) {
+            html.classList.remove('dark-mode');
+            localStorage.setItem('theme', 'light');
+        } else {
+            html.classList.add('dark-mode');
+            localStorage.setItem('theme', 'dark');
+        }
+
+        // Atualizar ícone
+        lucide.createIcons();
+    }
+
     // Toggle submenu
     function toggleSubmenu(element) {
         // Se sidebar está recolhido, expandir primeiro
@@ -337,6 +380,12 @@
     }
 
     document.addEventListener("DOMContentLoaded", function() {
+        // Carregar preferência de tema
+        const theme = localStorage.getItem('theme') || 'light';
+        if (theme === 'dark') {
+            document.documentElement.classList.add('dark-mode');
+        }
+
         lucide.createIcons();
 
         // Menu item ativo

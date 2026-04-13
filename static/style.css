@@ -1,11 +1,31 @@
 /* =========================
+   VARIÁVEIS DE TEMA
+========================= */
+:root {
+    --bg-main: #f8fafc;
+    --bg-content: #ffffff;
+    --text-primary: #1e293b;
+    --text-secondary: #64748b;
+    --border-color: #e2e8f0;
+}
+
+:root.dark-mode {
+    --bg-main: #0f172a;
+    --bg-content: #1e293b;
+    --text-primary: #f1f5f9;
+    --text-secondary: #cbd5e1;
+    --border-color: #334155;
+}
+
+/* =========================
    RESET & BASE
 ========================= */
 body {
     margin: 0;
     font-family: Arial, sans-serif;
-    background: #f4f6f9;
-    color: #333;
+    background: var(--bg-main);
+    color: var(--text-primary);
+    transition: background-color 0.3s, color 0.3s;
 }
 
 .layout {
