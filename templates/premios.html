@@ -9,11 +9,11 @@
 
     <!-- FILTROS DE STATUS -->
     <div style="display:flex; gap:6px; flex-wrap:nowrap; overflow-x:auto; padding:2px; padding-right:10px;">
-        {% for s, label, cor in [('','Todos','#4f46e5'),('I','Incluso','#2563eb'),('A','Autorizado','#16a34a'),('P','Pago','#475569'),('C','Cancelado','#dc2626')] %}
+        {% for s, label, cor_ativo, cor_pastel in [('','Todos','#4f46e5','#e0e7ff'),('I','Incluso','#2563eb','#bfdbfe'),('A','Autorizado','#16a34a','#bbf7d0'),('P','Pago','#475569','#e2e8f0'),('C','Cancelado','#dc2626','#fecaca')] %}
         <a href="/premios{% if s %}?status={{ s }}{% endif %}"
-           style="padding:6px 14px; border-radius:18px; font-size:12px; font-weight:700; text-decoration:none; white-space:nowrap;
-                  {% if filtro_status == s %}background:{{ cor }}; color:white;
-                  {% else %}background:#f1f5f9; color:#64748b; border:1px solid #e2e8f0;{% endif %}">
+           style="padding:6px 14px; border-radius:18px; font-size:12px; font-weight:700; text-decoration:none; white-space:nowrap; transition:all 0.2s;
+                  {% if filtro_status == s %}background:{{ cor_ativo }}; color:white; box-shadow:0 2px 8px rgba(0,0,0,0.1);
+                  {% else %}background:{{ cor_pastel }}; color:#475569; border:1px solid rgba(0,0,0,0.05);{% endif %}">
             {{ label }}
         </a>
         {% endfor %}
