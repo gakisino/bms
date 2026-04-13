@@ -10,8 +10,6 @@
 
 {% block content %}
 <div style="max-width: 1200px; margin: 0 auto;">
-    <h2 style="color:#1e293b; font-weight:700; margin-bottom:20px;">Controle de Acesso as Rotinas</h2>
-
     <!-- Mostrar erro se houver -->
     {% if erro %}
     <div style="background:#fee2e2; border-left:4px solid #ef4444; padding:15px; border-radius:8px; color:#991b1b; margin-bottom:20px;">
@@ -20,16 +18,20 @@
     </div>
     {% endif %}
 
-    <!-- Status das rotinas -->
-    <div style="background:#e0f2fe; border-left:4px solid #0284c7; padding:15px; border-radius:8px; color:#0c4a6e; margin-bottom:20px;">
-        Perfis carregados: <strong>{{ perfis|length }}</strong> | Rotinas disponiveis: <strong>{{ rotinas|length }}</strong>
-    </div>
+    <!-- HEADER COM FILTRO CONDENSADO -->
+    <div style="display:flex; align-items:center; gap:15px; margin-bottom:20px; flex-wrap:nowrap;">
+        <!-- TÍTULO -->
+        <h2 style="color:#1e293b; font-weight:700; margin:0; white-space:nowrap;">Controle de Acesso as Rotinas</h2>
 
-    <!-- Seletor de Perfil -->
-    <div style="background:white; border-radius:12px; padding:20px; margin-bottom:20px; border:1px solid #e2e8f0;">
-        <label style="display:block; font-weight:600; color:#1e293b; margin-bottom:10px;">Selecione um Perfil</label>
-        <form method="GET" style="display:flex; gap:10px; align-items:flex-end;">
-            <select name="id_perfil" onchange="this.form.submit()" style="padding:10px; border:1px solid #e2e8f0; border-radius:8px; font-size:14px; flex:1; max-width:300px;">
+        <!-- INFO/STATUS -->
+        <div style="background:#e0f2fe; border-left:4px solid #0284c7; padding:10px 15px; border-radius:8px; color:#0c4a6e; font-size:13px; white-space:nowrap;">
+            Perfis: <strong>{{ perfis|length }}</strong> | Rotinas: <strong>{{ rotinas|length }}</strong>
+        </div>
+
+        <!-- SELETOR DE PERFIL -->
+        <form method="GET" style="display:flex; gap:8px; align-items:center; margin-left:auto;">
+            <label style="font-weight:600; color:#1e293b; white-space:nowrap; font-size:13px;">Selecione um Perfil</label>
+            <select name="id_perfil" onchange="this.form.submit()" style="padding:8px 12px; border:1px solid #e2e8f0; border-radius:8px; font-size:13px; min-width:200px;">
                 <option value="">-- Escolha um perfil --</option>
                 {% for perfil in perfis %}
                 <option value="{{ perfil.id }}" {% if perfil.id == perfil_selecionado %}selected{% endif %}>

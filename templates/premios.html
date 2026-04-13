@@ -2,25 +2,29 @@
 {% from 'macros.html' import btn_novo, badge_premio_status %}
 
 {% block content %}
-<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-    <h2 style="color:#1e293b; font-weight:700;">🏆 Prêmios</h2>
-    <div style="display:flex; gap:10px; align-items:center;">
+<!-- HEADER COM FILTROS -->
+<div style="display:flex; align-items:center; gap:15px; margin-bottom:20px; flex-wrap:nowrap;">
+    <!-- TÍTULO -->
+    <h2 style="color:#1e293b; font-weight:700; margin:0; white-space:nowrap;">🏆 Prêmios</h2>
+
+    <!-- FILTROS DE STATUS -->
+    <div style="display:flex; gap:6px; flex-wrap:nowrap; overflow-x:auto; padding:2px; padding-right:10px;">
+        {% for s, label, cor in [('','Todos','#4f46e5'),('I','Incluso','#2563eb'),('A','Autorizado','#16a34a'),('P','Pago','#475569'),('C','Cancelado','#dc2626')] %}
+        <a href="/premios{% if s %}?status={{ s }}{% endif %}"
+           style="padding:6px 14px; border-radius:18px; font-size:12px; font-weight:700; text-decoration:none; white-space:nowrap;
+                  {% if filtro_status == s %}background:{{ cor }}; color:white;
+                  {% else %}background:#f1f5f9; color:#64748b; border:1px solid #e2e8f0;{% endif %}">
+            {{ label }}
+        </a>
+        {% endfor %}
+    </div>
+
+    <!-- BOTÃO NOVO -->
+    <div style="margin-left:auto;">
         {% if perms.pode_incluir %}
         {{ btn_novo('Novo Prêmio', 'abrirModalPremio()') }}
         {% endif %}
     </div>
-</div>
-
-{# Filtros de status #}
-<div style="display:flex; gap:8px; margin-bottom:20px; flex-wrap:wrap;">
-    {% for s, label, cor in [('','Todos','#4f46e5'),('I','Incluso','#2563eb'),('A','Autorizado','#16a34a'),('P','Pago','#475569'),('C','Cancelado','#dc2626')] %}
-    <a href="/premios{% if s %}?status={{ s }}{% endif %}"
-       style="padding:7px 16px; border-radius:20px; font-size:12px; font-weight:700; text-decoration:none;
-              {% if filtro_status == s %}background:{{ cor }}; color:white;
-              {% else %}background:#f1f5f9; color:#64748b; border:1px solid #e2e8f0;{% endif %}">
-        {{ label }}
-    </a>
-    {% endfor %}
 </div>
 
 <div style="background:white; border-radius:15px; box-shadow:0 4px 15px rgba(0,0,0,0.05); overflow:hidden; border:1px solid #f1f5f9;">

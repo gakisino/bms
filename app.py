@@ -205,6 +205,8 @@ def login():
 def agendamento():
     sort = request.args.get('sort', 'data')
     order = request.args.get('order', 'asc')
+    data_filtro = request.args.get('data', '')
+    unidade_filtro = request.args.get('unidade', '')
 
     if sort not in ('data', 'hora', 'nome', 'responsavel', 'id_operadores', 'unidades_id'):
         sort = 'data'
@@ -214,7 +216,22 @@ def agendamento():
     with get_cursor() as (_, cursor):
         # Monta ORDER BY: campo escolhido + data + hora
         order_by = f"a.{sort} {order}, a.data ASC, a.hora ASC"
-        cursor.execute(f"""
+
+        # Monta WHERE com filtros opcionais
+        where_clauses = []
+        params = []
+
+        if data_filtro:
+            where_clauses.append("a.data = %s")
+            params.append(data_filtro)
+
+        if unidade_filtro:
+            where_clauses.append("a.unidades_id = %s")
+            params.append(unidade_filtro)
+
+        where_clause = " WHERE " + " AND ".join(where_clauses) if where_clauses else ""
+
+        query = f"""
             SELECT a.id, a.data, a.hora, a.nome, a.telefone, a.idade, a.responsavel, a.observacao,
                    a.unidades_id, a.id_operadores,
                    COALESCE(a.confirmacao, 'N') as confirmado,
@@ -223,9 +240,25 @@ def agendamento():
             FROM agendamento a
             LEFT JOIN unidades u ON a.unidades_id = u.id
             LEFT JOIN operadores o ON a.id_operadores = o.id
+            {where_clause}
             ORDER BY {order_by}
-        """)
+        """
+
+        cursor.execute(query, params)
         lista_agendamentos = cursor.fetchall()
+
+        # Contagens para o resumo
+        query_count = f"""
+            SELECT
+                COUNT(*) as total,
+                SUM(CASE WHEN a.confirmacao = 'S' THEN 1 ELSE 0 END) as confirmados,
+                SUM(CASE WHEN a.compareceu = 'S' THEN 1 ELSE 0 END) as compareceu_count
+            FROM agendamento a
+            {where_clause}
+        """
+        cursor.execute(query_count, params)
+        resumo = cursor.fetchone()
+
         cursor.execute("SELECT id, nome FROM operadores ORDER BY nome")
         lista_operadores = cursor.fetchall()
         cursor.execute("SELECT id, nome FROM unidades ORDER BY nome")
@@ -236,7 +269,12 @@ def agendamento():
                            operadores=lista_operadores,
                            unidades=lista_unidades,
                            sort=sort,
-                           order=order)
+                           order=order,
+                           data_filtro=data_filtro,
+                           unidade_filtro=unidade_filtro,
+                           resumo_total=resumo['total'] or 0,
+                           resumo_confirmados=resumo['confirmados'] or 0,
+                           resumo_compareceu=resumo['compareceu_count'] or 0)
 
 
 # 💾 SALVAR AGENDAMENTO
