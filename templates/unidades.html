@@ -1,0 +1,205 @@
+{% extends "base.html" %}
+{% from 'macros.html' import btn_novo, th_sort %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px;">
+    <h2 style="color: #1e293b; font-weight: 700;">🏢 Unidades</h2>
+    <button onclick="abrirModalUnidade()" style="padding:10px 16px; background:#6366f1; color:white; border:none; border-radius:10px; cursor:pointer; font-weight:600;">+ Nova Unidade</button>
+</div>
+
+<!-- MENSAGENS -->
+{% if erro %}
+<div style="background:#fee2e2; color:#dc2626; padding:12px 16px; border-radius:10px; margin-bottom:20px; border-left:4px solid #dc2626;">
+    ✕ Erro: {{ erro }}
+</div>
+{% endif %}
+{% if ok %}
+<div style="background:#dcfce7; color:#16a34a; padding:12px 16px; border-radius:10px; margin-bottom:20px; border-left:4px solid #16a34a;">
+    ✓ Unidade {{ ok }} com sucesso!
+</div>
+{% endif %}
+
+<!-- TABELA -->
+<div style="background: white; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); overflow: hidden; border: 1px solid #f1f5f9;">
+    <table style="width: 100%; border-collapse: collapse;">
+        <thead style="background: #f8fafc; border-bottom: 2px solid #f1f5f9;">
+            <tr>
+                <th style="padding: 15px; text-align: left; color: #64748b; font-size: 11px; text-transform: uppercase;">Sigla</th>
+                <th style="padding: 15px; text-align: left; color: #64748b; font-size: 11px; text-transform: uppercase;">Nome</th>
+                <th style="padding: 15px; text-align: left; color: #64748b; font-size: 11px; text-transform: uppercase;">Telefone</th>
+                <th style="padding: 15px; text-align: left; color: #64748b; font-size: 11px; text-transform: uppercase;">Cidade</th>
+                <th style="padding: 15px; text-align: left; color: #64748b; font-size: 11px; text-transform: uppercase;">Horário</th>
+                <th style="padding: 15px; text-align: center; color: #64748b; font-size: 11px; text-transform: uppercase;">Qtd./Agendas</th>
+                <th style="padding: 15px; text-align: center; color: #64748b; font-size: 11px; text-transform: uppercase;">Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% if unidades %}
+                {% for u in unidades %}
+                <tr style="border-bottom: 1px solid #f1f5f9; transition: 0.2s;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='white'">
+                    <td style="padding: 15px; font-weight: 700; color: #6366f1; font-size: 13px;">{{ u.sigla }}</td>
+                    <td style="padding: 15px; font-weight: 600; color: #1e293b;">{{ u.nome }}</td>
+                    <td style="padding: 15px; color: #64748b;">{{ u.telefone or '—' }}</td>
+                    <td style="padding: 15px; color: #64748b;">{{ u.cidade or '—' }}</td>
+                    <td style="padding: 15px; color: #64748b; font-size: 13px;">
+                        {% if u.hora_inicio and u.hora_final %}
+                            {{ u.hora_inicio }} - {{ u.hora_final }}
+                        {% else %}
+                            —
+                        {% endif %}
+                    </td>
+                    <td style="padding: 15px; text-align: center; color: #1e293b; font-weight: 600;">{{ u.agendamento_quantidade or '—' }}</td>
+                    <td style="padding: 15px; text-align: center;">
+                        <div style="display:flex; justify-content:center; gap:12px;">
+                            <button type="button"
+                                onclick="preencherEdicaoUnidade({{ u.id }}, '{{ u.sigla }}', '{{ u.nome }}', '{{ u.endereco or '' }}', '{{ u.telefone or '' }}', '{{ u.bairro or '' }}', '{{ u.cidade or '' }}', '{{ u.observacao or '' }}', '{{ u.hora_inicio or '' }}', '{{ u.hora_final or '' }}', {{ u.intervalo or 0 }}, {{ u.agendamento_quantidade or 0 }}, '{{ u.hora_inicio_sab or '' }}', '{{ u.hora_final_sab or '' }}')"
+                                title="Editar" style="color: #6366f1; background: none; border: none; cursor: pointer;">
+                                <i data-lucide="edit-3" style="width: 18px;"></i>
+                            </button>
+                            <button type="button"
+                                onclick="if(confirm('Excluir unidade {{ u.nome }}?')) { document.getElementById('formDeleteUnidade').action = '/unidades/deletar/{{ u.id }}'; document.getElementById('formDeleteUnidade').submit(); }"
+                                title="Excluir" style="color: #ef4444; background: none; border: none; cursor: pointer;">
+                                <i data-lucide="trash-2" style="width: 18px;"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            {% else %}
+            <tr>
+                <td colspan="6" style="padding: 40px; text-align: center; color: #94a3b8;">
+                    Nenhuma unidade cadastrada
+                </td>
+            </tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+
+<!-- MODAL UNIDADE -->
+<div id="modalUnidade" style="display: none; position: fixed; inset: 0; background: rgba(15,23,42,0.7); z-index: 9999; align-items: center; justify-content: center; backdrop-filter: blur(4px);">
+    <div style="background: white; width: 95%; max-width: 800px; border-radius: 20px; padding: 30px; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);">
+        <h2 id="modalUnidadeTitle" style="color:#1e293b; font-weight:700; margin-bottom: 20px;">Nova Unidade</h2>
+
+        <form id="formUnidade" method="POST" action="/unidades/salvar">
+            <input type="hidden" name="id" id="f_id_unidade">
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+
+                <div>
+                    <label class="label-form">Sigla *</label>
+                    <input type="text" name="sigla" id="f_sigla" maxlength="5" required class="input-form" placeholder="SAN, STO, SJC">
+                </div>
+
+                <div>
+                    <label class="label-form">Nome *</label>
+                    <input type="text" name="nome" id="f_nome" required class="input-form" placeholder="Santana, Santo Amaro...">
+                </div>
+
+                <div style="grid-column: span 2;">
+                    <label class="label-form">Endereço</label>
+                    <input type="text" name="endereco" id="f_endereco" class="input-form" placeholder="Rua, avenida...">
+                </div>
+
+                <div>
+                    <label class="label-form">Telefone</label>
+                    <input type="text" name="telefone" id="f_telefone" class="input-form" placeholder="(11) 98765-4321">
+                </div>
+
+                <div>
+                    <label class="label-form">Bairro</label>
+                    <input type="text" name="bairro" id="f_bairro" class="input-form" placeholder="Santana">
+                </div>
+
+                <div>
+                    <label class="label-form">Cidade</label>
+                    <input type="text" name="cidade" id="f_cidade" class="input-form" placeholder="São Paulo">
+                </div>
+
+                <div style="grid-column: span 2;">
+                    <label class="label-form">Observação</label>
+                    <textarea name="observacao" id="f_observacao" class="input-form" style="resize: vertical; min-height: 80px;" placeholder="Informações adicionais..."></textarea>
+                </div>
+
+                <div>
+                    <label class="label-form">Horário Início</label>
+                    <input type="time" name="hora_inicio" id="f_hora_inicio" class="input-form">
+                </div>
+
+                <div>
+                    <label class="label-form">Horário Final</label>
+                    <input type="time" name="hora_final" id="f_hora_final" class="input-form">
+                </div>
+
+                <div>
+                    <label class="label-form">Hora Sábado Inicial</label>
+                    <input type="time" name="hora_inicio_sab" id="f_hora_inicio_sab" class="input-form">
+                </div>
+
+                <div>
+                    <label class="label-form">Hora Sábado Final</label>
+                    <input type="time" name="hora_final_sab" id="f_hora_final_sab" class="input-form">
+                </div>
+
+                <div>
+                    <label class="label-form">Intervalo entre Agendas (Minutos)</label>
+                    <input type="number" name="intervalo" id="f_intervalo" class="input-form" value="30" placeholder="30">
+                </div>
+
+                <div>
+                    <label class="label-form">Qtd Agendamentos Mesmo horário</label>
+                    <input type="number" name="agendamento_quantidade" id="f_agendamento_quantidade" class="input-form" value="10" placeholder="10">
+                </div>
+
+            </div>
+
+            <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 25px;">
+                <button type="button" onclick="fecharModalUnidade()" style="padding:10px 20px; background:#f1f5f9; color:#64748b; border:1px solid #e2e8f0; border-radius:10px; cursor:pointer; font-weight:600;">Cancelar</button>
+                <button type="submit" style="padding:10px 20px; background:#6366f1; color:white; border:none; border-radius:10px; cursor:pointer; font-weight:600;">Salvar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- FORM HIDDEN PARA DELETE -->
+<form id="formDeleteUnidade" method="POST" style="display:none;"></form>
+
+<script>
+function abrirModalUnidade() {
+    document.getElementById('f_id_unidade').value = '';
+    document.getElementById('modalUnidadeTitle').textContent = 'Nova Unidade';
+    document.getElementById('formUnidade').reset();
+    document.getElementById('modalUnidade').style.display = 'flex';
+}
+
+function fecharModalUnidade() {
+    document.getElementById('modalUnidade').style.display = 'none';
+}
+
+function preencherEdicaoUnidade(id, sigla, nome, endereco, telefone, bairro, cidade, observacao, hora_inicio, hora_final, intervalo, agendamento_quantidade, hora_inicio_sab, hora_final_sab) {
+    document.getElementById('f_id_unidade').value = id;
+    document.getElementById('f_sigla').value = sigla;
+    document.getElementById('f_nome').value = nome;
+    document.getElementById('f_endereco').value = endereco;
+    document.getElementById('f_telefone').value = telefone;
+    document.getElementById('f_bairro').value = bairro;
+    document.getElementById('f_cidade').value = cidade;
+    document.getElementById('f_observacao').value = observacao;
+    document.getElementById('f_hora_inicio').value = hora_inicio;
+    document.getElementById('f_hora_final').value = hora_final;
+    document.getElementById('f_hora_inicio_sab').value = hora_inicio_sab;
+    document.getElementById('f_hora_final_sab').value = hora_final_sab;
+    document.getElementById('f_intervalo').value = intervalo;
+    document.getElementById('f_agendamento_quantidade').value = agendamento_quantidade;
+
+    document.getElementById('modalUnidadeTitle').textContent = 'Editar Unidade';
+    document.getElementById('modalUnidade').style.display = 'flex';
+}
+
+// Fechar modal ao clicar fora
+document.getElementById('modalUnidade').addEventListener('click', function(e) {
+    if (e.target === this) fecharModalUnidade();
+});
+</script>
+
+{% endblock %}

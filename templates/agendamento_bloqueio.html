@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+{% from 'macros.html' import btn_novo, th_sort %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px;">
+    <h2 style="color: #1e293b; font-weight: 700;">🚫 Bloqueios de Agendamento</h2>
+    <button onclick="abrirModalBloqueio()" style="padding:10px 16px; background:#6366f1; color:white; border:none; border-radius:10px; cursor:pointer; font-weight:600;">+ Novo Bloqueio</button>
+</div>
+
+<!-- MENSAGENS -->
+{% if erro %}
+<div style="background:#fee2e2; color:#dc2626; padding:12px 16px; border-radius:10px; margin-bottom:20px; border-left:4px solid #dc2626;">
+    ✕ Erro: {{ erro }}
+</div>
+{% endif %}
+{% if ok %}
+<div style="background:#dcfce7; color:#16a34a; padding:12px 16px; border-radius:10px; margin-bottom:20px; border-left:4px solid #16a34a;">
+    ✓ Bloqueio {{ ok }} com sucesso!
+</div>
+{% endif %}
+
+<!-- TABELA -->
+<div style="background: white; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); overflow: hidden; border: 1px solid #f1f5f9;">
+    <table style="width: 100%; border-collapse: collapse;">
+        <thead style="background: #f8fafc; border-bottom: 2px solid #f1f5f9;">
+            <tr>
+                {{ th_sort('unidade',    'Unidade',     sort, order) }}
+                {{ th_sort('data_inicio', 'Data Início', sort, order) }}
+                {{ th_sort('data_final', 'Data Final',  sort, order) }}
+                <th style="padding: 15px; text-align: left; color: #64748b; font-size: 11px; text-transform: uppercase;">Horário</th>
+                {{ th_sort('motivo',     'Motivo',      sort, order) }}
+                <th style="padding: 15px; text-align: center; color: #64748b; font-size: 11px; text-transform: uppercase;">Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% if bloqueios %}
+                {% for b in bloqueios %}
+                <tr style="border-bottom: 1px solid #f1f5f9; transition: 0.2s;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='white'">
+                    <td style="padding: 15px; color: #64748b;">
+                        <span style="background: #e0e7ff; color: #4338ca; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 600;">
+                            {{ b.unidade_nome or '—' }}
+                        </span>
+                    </td>
+                    <td style="padding: 15px; font-weight: 600; color: #1e293b;">{{ b.data_inicio.strftime('%d/%m/%Y') if b.data_inicio else '—' }}</td>
+                    <td style="padding: 15px; font-weight: 600; color: #1e293b;">{{ b.data_final.strftime('%d/%m/%Y') if b.data_final else '—' }}</td>
+                    <td style="padding: 15px; color: #64748b; font-size: 13px;">
+                        {% if b.hora_inicio and b.hora_final %}
+                            {{ b.hora_inicio }} - {{ b.hora_final }}
+                        {% else %}
+                            Dia completo
+                        {% endif %}
+                    </td>
+                    <td style="padding: 15px; color: #64748b;">{{ b.motivo or '—' }}</td>
+                    <td style="padding: 15px; text-align: center;">
+                        <div style="display:flex; justify-content:center; gap:12px;">
+                            <button type="button"
+                                onclick="preencherEdicaoBloqueio({{ b.id }}, '{{ b.data_inicio }}', '{{ b.data_final }}', '{{ b.hora_inicio or '' }}', '{{ b.hora_final or '' }}', {{ b.unidades_id }}, '{{ b.motivo or '' }}')"
+                                title="Editar" style="color: #6366f1; background: none; border: none; cursor: pointer;">
+                                <i data-lucide="edit-3" style="width: 18px;"></i>
+                            </button>
+                            <button type="button"
+                                onclick="abrirConfirmacaoGlobal('{{ url_for('deletar_bloqueio', id=b.id) }}', 'Excluir Bloqueio', 'Deseja excluir o bloqueio de <strong>{{ b.data_inicio }} a {{ b.data_final }}</strong>?')"
+                                title="Excluir" style="color: #ef4444; background: none; border: none; cursor: pointer;">
+                                <i data-lucide="trash-2" style="width: 18px;"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            {% else %}
+            <tr>
+                <td colspan="6" style="padding: 40px; text-align: center; color: #94a3b8;">
+                    Nenhum bloqueio cadastrado
+                </td>
+            </tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+
+<!-- MODAL BLOQUEIO -->
+<div id="modalBloqueio" style="display: none; position: fixed; inset: 0; background: rgba(15,23,42,0.7); z-index: 9999; align-items: center; justify-content: center; backdrop-filter: blur(4px);">
+    <div style="background: white; width: 95%; max-width: 700px; border-radius: 20px; padding: 30px; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);">
+        <h2 id="modalBloqueioTitle" style="color:#1e293b; font-weight:700; margin-bottom: 20px;">Novo Bloqueio</h2>
+
+        <form id="formBloqueio" method="POST" action="/agendamento_bloqueio/salvar">
+            <input type="hidden" name="id" id="f_id_bloqueio">
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+
+                <div style="grid-column: span 2;">
+                    <label class="label-form">Unidade *</label>
+                    <select name="unidades_id" id="f_unidades_id" required class="input-form">
+                        <option value="">— Selecione —</option>
+                        {% for u in unidades %}
+                        <option value="{{ u.id }}">{{ u.sigla }} - {{ u.nome }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label class="label-form">Data Início *</label>
+                    <input type="date" name="data_inicio" id="f_data_inicio" required class="input-form">
+                </div>
+
+                <div>
+                    <label class="label-form">Data Final *</label>
+                    <input type="date" name="data_final" id="f_data_final" required class="input-form">
+                </div>
+
+                <div>
+                    <label class="label-form">Horário Início (opcional)</label>
+                    <input type="time" name="hora_inicio" id="f_hora_inicio" class="input-form">
+                </div>
+
+                <div>
+                    <label class="label-form">Horário Final (opcional)</label>
+                    <input type="time" name="hora_final" id="f_hora_final" class="input-form">
+                </div>
+
+                <div style="grid-column: span 2;">
+                    <label class="label-form">Motivo</label>
+                    <input type="text" name="motivo" id="f_motivo" class="input-form" placeholder="Ex: Férias, Manutenção...">
+                </div>
+
+            </div>
+
+            <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 25px;">
+                <button type="button" onclick="fecharModalBloqueio()" style="padding:10px 20px; background:#f1f5f9; color:#64748b; border:1px solid #e2e8f0; border-radius:10px; cursor:pointer; font-weight:600;">Cancelar</button>
+                <button type="submit" style="padding:10px 20px; background:#6366f1; color:white; border:none; border-radius:10px; cursor:pointer; font-weight:600;">Salvar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function abrirModalBloqueio() {
+    document.getElementById('f_id_bloqueio').value = '';
+    document.getElementById('modalBloqueioTitle').textContent = 'Novo Bloqueio';
+    document.getElementById('formBloqueio').reset();
+    document.getElementById('modalBloqueio').style.display = 'flex';
+}
+
+function fecharModalBloqueio() {
+    document.getElementById('modalBloqueio').style.display = 'none';
+}
+
+function preencherEdicaoBloqueio(id, data_inicio, data_final, hora_inicio, hora_final, unidades_id, motivo) {
+    document.getElementById('f_id_bloqueio').value = id;
+    document.getElementById('f_data_inicio').value = data_inicio;
+    document.getElementById('f_data_final').value = data_final;
+    document.getElementById('f_hora_inicio').value = hora_inicio;
+    document.getElementById('f_hora_final').value = hora_final;
+    document.getElementById('f_unidades_id').value = unidades_id;
+    document.getElementById('f_motivo').value = motivo;
+
+    document.getElementById('modalBloqueioTitle').textContent = 'Editar Bloqueio';
+    document.getElementById('modalBloqueio').style.display = 'flex';
+}
+
+// Fechar modal ao clicar fora
+document.getElementById('modalBloqueio').addEventListener('click', function(e) {
+    if (e.target === this) fecharModalBloqueio();
+});
+</script>
+
+{% endblock %}

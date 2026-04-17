@@ -1,0 +1,238 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div style="margin-bottom: 25px;">
+    <h2 style="color: #1e293b; font-weight: 700;">📅 Agenda Visual de Visitas</h2>
+</div>
+
+<!-- SELEÇÃO DE UNIDADE E DATA -->
+<div style="background: white; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); padding: 20px; margin-bottom: 25px; border: 1px solid #f1f5f9;">
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: flex-end;">
+        <div>
+            <label class="label-form" style="display: block; margin-bottom: 8px;">Unidade *</label>
+            <select id="selectUnidade" class="input-form" style="width: 100%;">
+                <option value="">— Selecione uma unidade —</option>
+                {% for u in unidades %}
+                <option value="{{ u.id }}" data-intervalo="{{ u.intervalo }}">{{ u.sigla }} - {{ u.nome }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div style="display: flex; gap: 10px; align-items: center;">
+            <button type="button" onclick="mudarData(-1)" style="padding: 10px 15px; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                ← Anterior
+            </button>
+            <input type="date" id="selectData" class="input-form" style="flex: 1; text-align: center;">
+            <button type="button" onclick="mudarData(1)" style="padding: 10px 15px; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                Próximo →
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- GRID DE HORÁRIOS -->
+<div style="background: white; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); padding: 20px; border: 1px solid #f1f5f9;">
+    <div id="gradeHorarios" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px;">
+        <div style="padding: 40px 20px; text-align: center; color: #94a3b8; grid-column: 1/-1;">
+            Selecione uma unidade para ver os horários disponíveis
+        </div>
+    </div>
+</div>
+
+<!-- LEGENDA -->
+<div style="display: flex; gap: 30px; margin-top: 20px; padding: 15px; background: #f8fafc; border-radius: 10px;">
+    <div style="display: flex; align-items: center; gap: 10px;">
+        <div style="width: 20px; height: 20px; background: #10b981; border-radius: 6px;"></div>
+        <span style="color: #64748b; font-size: 14px;">Livre</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 10px;">
+        <div style="width: 20px; height: 20px; background: #f59e0b; border-radius: 6px;"></div>
+        <span style="color: #64748b; font-size: 14px;">Parcialmente ocupado</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 10px;">
+        <div style="width: 20px; height: 20px; background: #ef4444; border-radius: 6px;"></div>
+        <span style="color: #64748b; font-size: 14px;">Ocupado</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 10px;">
+        <div style="width: 20px; height: 20px; background: #6b7280; border-radius: 6px;"></div>
+        <span style="color: #64748b; font-size: 14px;">Bloqueado</span>
+    </div>
+</div>
+
+<!-- MODAL DE AGENDAMENTO -->
+<div id="modalAgendamento" style="display: none; position: fixed; inset: 0; background: rgba(15,23,42,0.7); z-index: 9999; align-items: center; justify-content: center; backdrop-filter: blur(4px);">
+    <div style="background: white; width: 95%; max-width: 600px; border-radius: 20px; padding: 30px; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);">
+        <h2 style="color:#1e293b; font-weight:700; margin-bottom: 20px;">Novo Agendamento</h2>
+
+        <form id="formAgendamento" method="POST" action="/agendamento/salvar">
+            <input type="hidden" name="redirect_url" value="/agenda_visual">
+            <div style="display: grid; grid-template-columns: 1fr; gap: 15px;">
+
+                <div>
+                    <label class="label-form">Unidade</label>
+                    <input type="text" id="modalUnidade" disabled class="input-form" style="background: #f1f5f9;">
+                    <input type="hidden" name="unidade_id" id="modalUnidadeId">
+                </div>
+
+                <div>
+                    <label class="label-form">Data</label>
+                    <input type="text" id="modalData" disabled class="input-form" style="background: #f1f5f9;">
+                    <input type="hidden" name="data" id="modalDataHidden">
+                </div>
+
+                <div>
+                    <label class="label-form">Horário</label>
+                    <input type="text" id="modalHora" disabled class="input-form" style="background: #f1f5f9;">
+                    <input type="hidden" name="hora" id="modalHoraHidden">
+                </div>
+
+                <div>
+                    <label class="label-form">Nome *</label>
+                    <input type="text" name="nome" id="f_nome" required class="input-form" placeholder="Nome completo">
+                </div>
+
+                <div>
+                    <label class="label-form">Telefone *</label>
+                    <input type="text" name="telefone" id="f_telefone" required class="input-form" placeholder="(11) 98765-4321">
+                </div>
+
+                <div>
+                    <label class="label-form">Observação</label>
+                    <textarea name="observacao" id="f_observacao" class="input-form" style="resize: vertical; min-height: 80px;" placeholder="Informações adicionais..."></textarea>
+                </div>
+
+            </div>
+
+            <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 25px;">
+                <button type="button" onclick="fecharModalAgendamento()" style="padding:10px 20px; background:#f1f5f9; color:#64748b; border:1px solid #e2e8f0; border-radius:10px; cursor:pointer; font-weight:600;">Cancelar</button>
+                <button type="submit" style="padding:10px 20px; background:#6366f1; color:white; border:none; border-radius:10px; cursor:pointer; font-weight:600;">Agendar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+let unidadeSelecionada = null;
+
+// Carregar data padrão
+document.getElementById('selectData').valueAsDate = new Date();
+
+// Evento ao selecionar unidade
+document.getElementById('selectUnidade').addEventListener('change', carregarHorarios);
+
+// Evento ao mudar data
+document.getElementById('selectData').addEventListener('change', carregarHorarios);
+
+function carregarHorarios() {
+    const unidadeId = document.getElementById('selectUnidade').value;
+    const data = document.getElementById('selectData').value;
+
+    if (!unidadeId || !data) {
+        document.getElementById('gradeHorarios').innerHTML = '<div style="padding: 40px 20px; text-align: center; color: #94a3b8; grid-column: 1/-1;">Selecione unidade e data</div>';
+        return;
+    }
+
+    unidadeSelecionada = unidadeId;
+
+    fetch(`/api/horarios?unidade_id=${unidadeId}&data=${data}`)
+        .then(r => r.json())
+        .then(data => {
+            const grade = document.getElementById('gradeHorarios');
+            grade.innerHTML = '';
+
+            if (!data.horarios || data.horarios.length === 0) {
+                grade.innerHTML = '<div style="padding: 40px 20px; text-align: center; color: #94a3b8; grid-column: 1/-1;">Nenhum horário disponível</div>';
+                return;
+            }
+
+            data.horarios.forEach(slot => {
+                const div = document.createElement('div');
+                div.style.cssText = `
+                    padding: 15px;
+                    border-radius: 10px;
+                    text-align: center;
+                    cursor: pointer;
+                    transition: 0.2s;
+                    border: 2px solid;
+                    user-select: none;
+                `;
+
+                let background, cor, texto;
+
+                if (slot.status === 'livre') {
+                    background = '#d1fae5';
+                    cor = '#059669';
+                    texto = slot.hora;
+                } else if (slot.status === 'bloqueado') {
+                    background = '#e5e7eb';
+                    cor = '#4b5563';
+                    texto = `${slot.hora}\n🚫 ${slot.motivo || 'Bloqueado'}`;
+                    div.style.cursor = 'not-allowed';
+                } else {
+                    // Ocupado
+                    background = slot.agendamentos >= 2 ? '#fee2e2' : '#fef3c7';
+                    cor = slot.agendamentos >= 2 ? '#dc2626' : '#d97706';
+                    texto = `${slot.hora}\n${slot.cliente_nome}\n${slot.cliente_telefone}`;
+                }
+
+                div.style.background = background;
+                div.style.color = cor;
+                div.style.borderColor = cor;
+                div.style.fontWeight = '600';
+                div.style.whiteSpace = 'pre-wrap';
+                div.style.fontSize = '12px';
+                div.innerHTML = texto;
+
+                if (slot.status !== 'bloqueado') {
+                    div.ondblclick = () => abrirModalAgendamento(slot.hora);
+                    div.onmouseover = () => div.style.opacity = '0.8';
+                    div.onmouseout = () => div.style.opacity = '1';
+                }
+
+                grade.appendChild(div);
+            });
+        })
+        .catch(e => {
+            console.error(e);
+            document.getElementById('gradeHorarios').innerHTML = '<div style="padding: 40px 20px; text-align: center; color: #ef4444; grid-column: 1/-1;">Erro ao carregar horários</div>';
+        });
+}
+
+function mudarData(dias) {
+    const input = document.getElementById('selectData');
+    const data = new Date(input.valueAsDate);
+    data.setDate(data.getDate() + dias);
+    input.valueAsDate = data;
+    carregarHorarios();
+}
+
+function abrirModalAgendamento(hora) {
+    const unidadeId = document.getElementById('selectUnidade').value;
+    const unidadeText = document.getElementById('selectUnidade').options[document.getElementById('selectUnidade').selectedIndex].text;
+    const data = document.getElementById('selectData').value;
+
+    document.getElementById('modalUnidade').value = unidadeText;
+    document.getElementById('modalUnidadeId').value = unidadeId;
+    document.getElementById('modalData').value = data;
+    document.getElementById('modalDataHidden').value = data;
+    document.getElementById('modalHora').value = hora;
+    document.getElementById('modalHoraHidden').value = hora;
+
+    document.getElementById('f_nome').value = '';
+    document.getElementById('f_telefone').value = '';
+    document.getElementById('f_observacao').value = '';
+
+    document.getElementById('modalAgendamento').style.display = 'flex';
+}
+
+function fecharModalAgendamento() {
+    document.getElementById('modalAgendamento').style.display = 'none';
+}
+
+// Fechar modal ao clicar fora
+document.getElementById('modalAgendamento').addEventListener('click', function(e) {
+    if (e.target === this) fecharModalAgendamento();
+});
+</script>
+
+{% endblock %}

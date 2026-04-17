@@ -108,7 +108,7 @@
             transition: max-height 0.3s ease;
             background: #0f172a;
         }
-        .submenu.open { max-height: 500px; }
+        .submenu.open { max-height: 800px; }
 
         .submenu-item {
             display: flex;
@@ -229,6 +229,7 @@
             <a href="/agenda"      class="menu-item" data-tooltip="Agenda"><i data-lucide="calendar-days"></i> <span class="menu-text">Agenda</span></a>
             <a href="/dashboard"   class="menu-item" data-tooltip="Dashboard"><i data-lucide="layout-dashboard"></i> <span class="menu-text">Dashboard</span></a>
             <a href="/agendamento" class="menu-item" data-tooltip="Agendamento"><i data-lucide="calendar"></i> <span class="menu-text">Agendamento</span></a>
+            <a href="/agendamento_bloqueio" class="menu-item" data-tooltip="Bloqueios"><i data-lucide="ban"></i> <span class="menu-text">Bloqueios</span></a>
             <a href="/premios"     class="menu-item" data-tooltip="Prêmios"><i data-lucide="trophy"></i> <span class="menu-text">Prêmios</span></a>
 
             <div class="menu-category" onclick="toggleSubmenu(this)" data-tooltip="Configurações">
@@ -252,15 +253,14 @@
                 {% if not rotinas_acesso or get_rotina_id('premios_tabela') in rotinas_acesso %}
                 <a href="/premios_tabela"    class="submenu-item" data-tooltip="Tabela"><i data-lucide="list" style="width:18px; height:18px;"></i> <span class="menu-text">Tabela de Prêmios</span></a>
                 {% endif %}
+                {% if not rotinas_acesso or get_rotina_id('unidades') in rotinas_acesso %}
+                <a href="/unidades"          class="submenu-item" data-tooltip="Unidades"><i data-lucide="building-2" style="width:18px; height:18px;"></i> <span class="menu-text">Unidades</span></a>
+                {% endif %}
                 {% if not rotinas_acesso or get_rotina_id('rotinas') in rotinas_acesso %}
                 <a href="/rotinas/permissoes" class="submenu-item" data-tooltip="Rotinas"><i data-lucide="shield-alert" style="width:18px; height:18px;"></i> <span class="menu-text">Acesso às Rotinas</span></a>
                 {% endif %}
             </div>
         </nav>
-
-        <div class="logout-area">
-            <a href="/logout" class="menu-item btn-sair" data-tooltip="Sair"><i data-lucide="log-out"></i> <span class="menu-text">Sair</span></a>
-        </div>
     </aside>
 
     <div class="main">

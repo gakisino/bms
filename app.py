@@ -31,7 +31,7 @@ def get_cursor(dictionary=True):
     try:
         yield conn, cursor
         conn.commit()
-    except Exception:
+    except Exception:      
         conn.rollback()
         raise
     finally:
@@ -291,6 +291,7 @@ def salvar_agendamento():
     responsavel = request.form.get('responsavel')
     telefone    = re.sub(r'\D', '', request.form.get('telefone', ''))  # Remove máscara
     observacao  = request.form.get('observacao')
+    redirect_url = request.form.get('redirect_url', '/agendamento?ok=salvo')
 
     try:
         with get_cursor(dictionary=False) as (_, cursor):
@@ -307,9 +308,11 @@ def salvar_agendamento():
                     (nome, data, hora, unidade, operador, idade, responsavel, telefone, observacao))
     except Exception as e:
         print(f"ERRO AO SALVAR AGENDAMENTO: {e}")
-        return redirect('/agendamento?erro=salvar')
+        error_redirect = redirect_url if '?' in redirect_url else f"{redirect_url}?erro=salvar"
+        return redirect(error_redirect)
 
-    return redirect('/agendamento?ok=salvo')
+    success_redirect = redirect_url if '?' in redirect_url else f"{redirect_url}?ok=salvo"
+    return redirect(success_redirect)
 
 
 # 🔍 VERIFICAÇÃO
@@ -1360,6 +1363,344 @@ def salvar_rotinas_permissoes():
         return redirect(f'/rotinas/permissoes?id_perfil={id_perfil}&erro=salvar')
 
     return redirect(f'/rotinas/permissoes?id_perfil={id_perfil}&ok=salvo')
+
+
+# 🏢 UNIDADES
+@app.route('/unidades')
+@login_required
+def unidades():
+    """Lista todas as unidades"""
+    try:
+        with get_cursor() as (_, cursor):
+            cursor.execute("SELECT * FROM unidades ORDER BY nome")
+            unidades_list = cursor.fetchall()
+
+        # Converter timedelta para string hh:mm
+        for u in unidades_list:
+            for campo in ['hora_inicio', 'hora_final', 'hora_inicio_sab', 'hora_final_sab']:
+                if u.get(campo):
+                    total_seconds = int(u[campo].total_seconds())
+                    hours = total_seconds // 3600
+                    minutes = (total_seconds % 3600) // 60
+                    u[campo] = f"{hours:02d}:{minutes:02d}"
+
+        return render_template('unidades.html', unidades=unidades_list)
+    except Exception as e:
+        print(f"[ERRO] Listar unidades: {e}")
+        return render_template('unidades.html', unidades=[], erro="Erro ao carregar unidades")
+
+
+@app.route('/unidades/salvar', methods=['POST'])
+@login_required
+def salvar_unidade():
+    """Salvar/editar unidade"""
+    try:
+        id_unidade = request.form.get('id', '').strip()
+        nome = request.form.get('nome', '').strip()
+        endereco = request.form.get('endereco', '').strip()
+        observacao = request.form.get('observacao', '').strip()
+        telefone = request.form.get('telefone', '').strip()
+        bairro = request.form.get('bairro', '').strip()
+        cidade = request.form.get('cidade', '').strip()
+        sigla = request.form.get('sigla', '').strip()
+        hora_inicio = request.form.get('hora_inicio', '').strip()
+        hora_final = request.form.get('hora_final', '').strip()
+        intervalo = request.form.get('intervalo', '0').strip()
+        agendamento_quantidade = request.form.get('agendamento_quantidade', '0').strip()
+        hora_inicio_sab = request.form.get('hora_inicio_sab', '').strip()
+        hora_final_sab = request.form.get('hora_final_sab', '').strip()
+
+        if not nome or not sigla:
+            return redirect('/unidades?erro=campos_obrigatorios')
+
+        with get_cursor() as (_, cursor):
+            if id_unidade:
+                # Editar
+                cursor.execute("""
+                    UPDATE unidades SET
+                        nome=%s, endereco=%s, observacao=%s, telefone=%s,
+                        bairro=%s, cidade=%s, sigla=%s, hora_inicio=%s,
+                        hora_final=%s, intervalo=%s, agendamento_quantidade=%s,
+                        hora_inicio_sab=%s, hora_final_sab=%s
+                    WHERE id=%s
+                """, (nome, endereco, observacao, telefone, bairro, cidade,
+                      sigla, hora_inicio, hora_final, intervalo, agendamento_quantidade,
+                      hora_inicio_sab, hora_final_sab, id_unidade))
+            else:
+                # Criar
+                cursor.execute("""
+                    INSERT INTO unidades
+                    (nome, endereco, observacao, telefone, bairro, cidade, sigla,
+                     hora_inicio, hora_final, intervalo, agendamento_quantidade,
+                     hora_inicio_sab, hora_final_sab)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """, (nome, endereco, observacao, telefone, bairro, cidade, sigla,
+                      hora_inicio, hora_final, intervalo, agendamento_quantidade,
+                      hora_inicio_sab, hora_final_sab))
+
+        return redirect('/unidades?ok=salvo')
+
+    except Exception as e:
+        print(f"[ERRO] Salvar unidade: {e}")
+        return redirect('/unidades?erro=salvar')
+
+
+@app.route('/unidades/deletar/<int:id>', methods=['POST'])
+@login_required
+def deletar_unidade(id):
+    """Deletar unidade"""
+    try:
+        with get_cursor() as (_, cursor):
+            cursor.execute("DELETE FROM unidades WHERE id=%s", (id,))
+        return redirect('/unidades?ok=deletado')
+    except Exception as e:
+        print(f"[ERRO] Deletar unidade: {e}")
+        return redirect('/unidades?erro=deletar')
+
+
+# 🚫 AGENDAMENTO BLOQUEIO
+@app.route('/agendamento_bloqueio')
+@login_required
+def agendamento_bloqueio():
+    """Lista bloqueios de agendamento"""
+    try:
+        sort = request.args.get('sort', 'unidade')
+        order = request.args.get('order', 'asc').lower()
+
+        # Validar order (apenas asc ou desc)
+        if order not in ('asc', 'desc'):
+            order = 'asc'
+
+        # Montar ORDER BY dinamicamente
+        ordem_sql = ""
+        if sort == 'unidade':
+            ordem_sql = f"u.nome {order}, ab.data_inicio asc, ab.hora_inicio asc"
+        elif sort == 'data_inicio':
+            ordem_sql = f"ab.data_inicio {order}, ab.hora_inicio asc"
+        elif sort == 'data_final':
+            ordem_sql = f"ab.data_final {order}"
+        elif sort == 'motivo':
+            ordem_sql = f"ab.motivo {order}"
+        else:
+            ordem_sql = "ab.data_inicio desc, ab.hora_inicio asc"
+
+        with get_cursor() as (_, cursor):
+            cursor.execute(f"""
+                SELECT ab.*, u.nome as unidade_nome
+                FROM agendamento_bloqueio ab
+                LEFT JOIN unidades u ON ab.unidades_id = u.id
+                ORDER BY {ordem_sql}
+            """)
+            bloqueios = cursor.fetchall()
+
+            # Converter timedelta para string hh:mm
+            for b in bloqueios:
+                if b.get('hora_inicio'):
+                    total_seconds = int(b['hora_inicio'].total_seconds())
+                    hours = total_seconds // 3600
+                    minutes = (total_seconds % 3600) // 60
+                    b['hora_inicio'] = f"{hours:02d}:{minutes:02d}"
+                if b.get('hora_final'):
+                    total_seconds = int(b['hora_final'].total_seconds())
+                    hours = total_seconds // 3600
+                    minutes = (total_seconds % 3600) // 60
+                    b['hora_final'] = f"{hours:02d}:{minutes:02d}"
+
+            # Obter lista de unidades para o select
+            cursor.execute("SELECT id, nome, sigla FROM unidades ORDER BY nome")
+            unidades_list = cursor.fetchall()
+
+        return render_template('agendamento_bloqueio.html', bloqueios=bloqueios, unidades=unidades_list, sort=sort, order=order)
+    except Exception as e:
+        print(f"[ERRO] Listar bloqueios: {e}")
+        return render_template('agendamento_bloqueio.html', bloqueios=[], unidades=[], erro="Erro ao carregar bloqueios")
+
+
+@app.route('/agendamento_bloqueio/salvar', methods=['POST'])
+@login_required
+@acesso_alteracao_required('agendamento_block')
+def salvar_bloqueio():
+    """Salvar/editar bloqueio de agendamento"""
+    try:
+        id_bloqueio = request.form.get('id', '').strip()
+        data_inicio = request.form.get('data_inicio', '').strip()
+        data_final = request.form.get('data_final', '').strip()
+        hora_inicio = request.form.get('hora_inicio', '').strip()
+        hora_final = request.form.get('hora_final', '').strip()
+        unidades_id = request.form.get('unidades_id', '').strip()
+        motivo = request.form.get('motivo', '').strip()
+
+        if not data_inicio or not data_final or not unidades_id:
+            return redirect('/agendamento_bloqueio?erro=campos_obrigatorios')
+
+        with get_cursor() as (_, cursor):
+            if id_bloqueio:
+                # Editar
+                cursor.execute("""
+                    UPDATE agendamento_bloqueio SET
+                        data_inicio=%s, data_final=%s, hora_inicio=%s,
+                        hora_final=%s, unidades_id=%s, motivo=%s
+                    WHERE id=%s
+                """, (data_inicio, data_final, hora_inicio or None,
+                      hora_final or None, unidades_id, motivo, id_bloqueio))
+            else:
+                # Criar
+                cursor.execute("""
+                    INSERT INTO agendamento_bloqueio
+                    (data_inicio, data_final, hora_inicio, hora_final, unidades_id, motivo)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                """, (data_inicio, data_final, hora_inicio or None,
+                      hora_final or None, unidades_id, motivo))
+
+        return redirect('/agendamento_bloqueio?ok=salvo')
+
+    except Exception as e:
+        print(f"[ERRO] Salvar bloqueio: {e}")
+        return redirect('/agendamento_bloqueio?erro=salvar')
+
+
+@app.route('/agendamento_bloqueio/deletar/<int:id>', methods=['POST'])
+@login_required
+@acesso_alteracao_required('agendamento_block')
+def deletar_bloqueio(id):
+    """Deletar bloqueio de agendamento"""
+    try:
+        with get_cursor() as (_, cursor):
+            cursor.execute("DELETE FROM agendamento_bloqueio WHERE id=%s", (id,))
+        return redirect('/agendamento_bloqueio?ok=deletado')
+    except Exception as e:
+        print(f"[ERRO] Deletar bloqueio: {e}")
+        return redirect('/agendamento_bloqueio?erro=deletar')
+
+
+# 📅 AGENDA VISUAL (Agendamento de Visitas)
+@app.route('/agenda_visual')
+@login_required
+def agenda_visual():
+    """Tela visual de agendamento de visitas"""
+    from datetime import datetime, timedelta
+
+    try:
+        # Obter unidades
+        with get_cursor() as (_, cursor):
+            cursor.execute("SELECT id, nome, sigla, intervalo, hora_inicio, hora_final, hora_inicio_sab, hora_final_sab FROM unidades ORDER BY nome")
+            unidades_list = cursor.fetchall()
+
+        return render_template('agenda_visual.html', unidades=unidades_list, data_padrao=datetime.now().strftime('%Y-%m-%d'))
+    except Exception as e:
+        print(f"[ERRO] Agenda visual: {e}")
+        return render_template('agenda_visual.html', unidades=[], erro="Erro ao carregar agenda")
+
+
+@app.route('/api/horarios', methods=['GET'])
+@login_required
+def api_horarios():
+    """API para obter horários e agendamentos de uma unidade/data"""
+    from datetime import datetime, timedelta, time
+
+    try:
+        unidade_id = request.args.get('unidade_id')
+        data = request.args.get('data')
+
+        if not unidade_id or not data:
+            return jsonify({'erro': 'Parâmetros inválidos'}), 400
+
+        data_obj = datetime.strptime(data, '%Y-%m-%d').date()
+        dia_semana = data_obj.weekday()  # 0=seg, 5=sab, 6=dom
+        eh_sabado = dia_semana == 5
+
+        with get_cursor() as (_, cursor):
+            # Obter info da unidade
+            cursor.execute("""
+                SELECT intervalo, hora_inicio, hora_final, hora_inicio_sab, hora_final_sab
+                FROM unidades WHERE id=%s
+            """, (unidade_id,))
+            unidade = cursor.fetchone()
+
+            if not unidade:
+                return jsonify({'erro': 'Unidade não encontrada'}), 404
+
+            # Determinar horários
+            if eh_sabado:
+                hora_inicio = unidade['hora_inicio_sab']
+                hora_final = unidade['hora_final_sab']
+            else:
+                hora_inicio = unidade['hora_inicio']
+                hora_final = unidade['hora_final']
+
+            # Gerar slots de horários
+            horarios = []
+            if hora_inicio and hora_final:
+                h_inicio = datetime.combine(data_obj, hora_inicio)
+                h_final = datetime.combine(data_obj, hora_final)
+                intervalo_min = unidade['intervalo'] or 30
+
+                atual = h_inicio
+                while atual < h_final:
+                    horarios.append(atual.strftime('%H:%M'))
+                    atual += timedelta(minutes=intervalo_min)
+
+            # Obter agendamentos do dia
+            cursor.execute("""
+                SELECT id, hora, nome, telefone
+                FROM agendamento
+                WHERE unidades_id=%s AND data=%s
+                ORDER BY hora
+            """, (unidade_id, data))
+            agendamentos = cursor.fetchall()
+
+            # Obter bloqueios
+            cursor.execute("""
+                SELECT * FROM agendamento_bloqueio
+                WHERE unidades_id=%s
+                AND %s BETWEEN data_inicio AND data_final
+            """, (unidade_id, data))
+            bloqueios = cursor.fetchall()
+
+            # Montar resposta
+            resultado = []
+            for hora in horarios:
+                slot = {
+                    'hora': hora,
+                    'status': 'livre',
+                    'cliente_nome': None,
+                    'cliente_telefone': None,
+                    'agendamentos': 0
+                }
+
+                # Verificar agendamentos nesse horário
+                agendados_nesse_horario = [a for a in agendamentos if str(a['hora']) == hora]
+                slot['agendamentos'] = len(agendados_nesse_horario)
+
+                # Verificar limite
+                if slot['agendamentos'] > 0:
+                    slot['status'] = 'ocupado'
+                    if agendados_nesse_horario:
+                        primeiro = agendados_nesse_horario[0]
+                        slot['cliente_nome'] = primeiro.get('nome', 'Cliente')
+                        slot['cliente_telefone'] = primeiro.get('telefone', '')
+
+                # Verificar bloqueios
+                for bloqueio in bloqueios:
+                    hora_obj = datetime.strptime(hora, '%H:%M').time()
+
+                    # Se o bloqueio tem horários específicos
+                    if bloqueio['hora_inicio'] and bloqueio['hora_final']:
+                        if bloqueio['hora_inicio'] <= hora_obj < bloqueio['hora_final']:
+                            slot['status'] = 'bloqueado'
+                            slot['motivo'] = bloqueio.get('motivo', 'Bloqueado')
+                    else:
+                        # Bloqueio de dia completo
+                        slot['status'] = 'bloqueado'
+                        slot['motivo'] = bloqueio.get('motivo', 'Dia bloqueado')
+
+                resultado.append(slot)
+
+            return jsonify({'horarios': resultado}), 200
+
+    except Exception as e:
+        print(f"[ERRO] API horários: {e}")
+        return jsonify({'erro': str(e)}), 500
 
 
 if __name__ == '__main__':
