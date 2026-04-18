@@ -1414,6 +1414,8 @@ def salvar_unidade():
         agendamento_quantidade = request.form.get('agendamento_quantidade', '0').strip()
         hora_inicio_sab = request.form.get('hora_inicio_sab', '').strip()
         hora_final_sab = request.form.get('hora_final_sab', '').strip()
+        cor_bg = request.form.get('cor_bg', '#e0e7ff').strip()
+        cor_texto = request.form.get('cor_texto', '#4f46e5').strip()
 
         if not nome or not sigla:
             return redirect('/unidades?erro=campos_obrigatorios')
@@ -1426,22 +1428,22 @@ def salvar_unidade():
                         nome=%s, endereco=%s, observacao=%s, telefone=%s,
                         bairro=%s, cidade=%s, sigla=%s, hora_inicio=%s,
                         hora_final=%s, intervalo=%s, agendamento_quantidade=%s,
-                        hora_inicio_sab=%s, hora_final_sab=%s
+                        hora_inicio_sab=%s, hora_final_sab=%s, cor_bg=%s, cor_texto=%s
                     WHERE id=%s
                 """, (nome, endereco, observacao, telefone, bairro, cidade,
                       sigla, hora_inicio, hora_final, intervalo, agendamento_quantidade,
-                      hora_inicio_sab, hora_final_sab, id_unidade))
+                      hora_inicio_sab, hora_final_sab, cor_bg, cor_texto, id_unidade))
             else:
                 # Criar
                 cursor.execute("""
                     INSERT INTO unidades
                     (nome, endereco, observacao, telefone, bairro, cidade, sigla,
                      hora_inicio, hora_final, intervalo, agendamento_quantidade,
-                     hora_inicio_sab, hora_final_sab)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                     hora_inicio_sab, hora_final_sab, cor_bg, cor_texto)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """, (nome, endereco, observacao, telefone, bairro, cidade, sigla,
                       hora_inicio, hora_final, intervalo, agendamento_quantidade,
-                      hora_inicio_sab, hora_final_sab))
+                      hora_inicio_sab, hora_final_sab, cor_bg, cor_texto))
 
         return redirect('/unidades?ok=salvo')
 
