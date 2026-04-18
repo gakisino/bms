@@ -202,6 +202,7 @@ def login():
 # 📅 AGENDAMENTO
 @app.route('/agendamento')
 @login_required
+@acesso_alteracao_required('visitas')
 def agendamento():
     sort = request.args.get('sort', 'data')
     order = request.args.get('order', 'asc')
@@ -280,6 +281,7 @@ def agendamento():
 # 💾 SALVAR AGENDAMENTO
 @app.route('/agendamento/salvar', methods=['POST'])
 @login_required
+@acesso_alteracao_required('visitas')
 def salvar_agendamento():
     id_ag       = request.form.get('id')
     nome        = request.form.get('nome')
@@ -374,6 +376,7 @@ def logout():
 # 🗑️ DELETAR AGENDAMENTO
 @app.route('/agendamento/deletar/<int:id>')
 @login_required
+@acesso_alteracao_required('visitas')
 def deletar_agendamento(id):
     with get_cursor(dictionary=False) as (_, cursor):
         cursor.execute("DELETE FROM agendamento WHERE id = %s", (id,))
@@ -383,6 +386,7 @@ def deletar_agendamento(id):
 # ✅ TOGGLE CONFIRMAÇÃO
 @app.route('/agendamento/toggle-confirmacao', methods=['POST'])
 @login_required
+@acesso_alteracao_required('visitas')
 def toggle_confirmacao():
     id_ag = request.form.get('id')
     confirmacao = request.form.get('confirmacao')
@@ -395,6 +399,7 @@ def toggle_confirmacao():
 # ✅ TOGGLE COMPARECEU
 @app.route('/agendamento/toggle-compareceu', methods=['POST'])
 @login_required
+@acesso_alteracao_required('visitas')
 def toggle_compareceu():
     id_ag = request.form.get('id')
     compareceu = request.form.get('compareceu')
@@ -1576,6 +1581,7 @@ def deletar_bloqueio(id):
 # 📅 AGENDA VISUAL (Agendamento de Visitas)
 @app.route('/agenda_visual')
 @login_required
+@acesso_alteracao_required('agendamento')
 def agenda_visual():
     """Tela visual de agendamento de visitas"""
     from datetime import datetime, timedelta
