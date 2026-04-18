@@ -13,7 +13,7 @@
             <select id="selectUnidade" class="input-form" style="width: 100%; background: white; color: #1e293b;">
                 <option value="">— Selecione uma unidade —</option>
                 {% for u in unidades %}
-                <option value="{{ u.id }}" data-intervalo="{{ u.intervalo }}" data-cor_bg="{{ u.cor_bg or '#e0e7ff' }}" data-cor_texto="{{ u.cor_texto or '#4f46e5' }}" data-sigla="{{ u.sigla }}">{{ u.sigla }} - {{ u.nome }}</option>
+                <option value="{{ u.id }}" data-intervalo="{{ u.intervalo }}" data-cor-bg="{{ u.cor_bg or '#e0e7ff' }}" data-cor-texto="{{ u.cor_texto or '#4f46e5' }}" data-sigla="{{ u.sigla }}">{{ u.sigla }} - {{ u.nome }}</option>
                 {% endfor %}
             </select>
         </div>
@@ -116,14 +116,18 @@ let unidadeSelecionada = null;
 
 function atualizarBadgeUnidade() {
     const selectUnidade = document.getElementById('selectUnidade');
-    const option = selectUnidade.options[selectUnidade.selectedIndex];
+    const selectedValue = selectUnidade.value;
 
-    if (selectUnidade.value === '') {
+    if (!selectedValue) {
         selectUnidade.style.background = 'white';
         selectUnidade.style.color = '#1e293b';
-    } else {
-        const corBg = option.getAttribute('data-cor_bg') || '#e0e7ff';
-        const corTexto = option.getAttribute('data-cor_texto') || '#4f46e5';
+        return;
+    }
+
+    const option = selectUnidade.querySelector(`option[value="${selectedValue}"]`);
+    if (option) {
+        const corBg = option.dataset.corBg || '#e0e7ff';
+        const corTexto = option.dataset.corTexto || '#4f46e5';
         selectUnidade.style.background = corBg;
         selectUnidade.style.color = corTexto;
     }
@@ -137,6 +141,9 @@ document.getElementById('selectUnidade').addEventListener('change', function() {
     atualizarBadgeUnidade();
     carregarHorarios();
 });
+
+// Aplicar cores iniciais quando página carrega
+atualizarBadgeUnidade();
 
 // Evento ao mudar data
 document.getElementById('selectData').addEventListener('change', carregarHorarios);
