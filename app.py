@@ -1628,9 +1628,20 @@ def api_horarios():
                 hora_inicio = unidade['hora_inicio']
                 hora_final = unidade['hora_final']
 
+            # Converter timedelta para time object se necessário
+            def timedelta_para_time(td):
+                if isinstance(td, timedelta):
+                    total_seconds = int(td.total_seconds())
+                    hours = total_seconds // 3600
+                    minutes = (total_seconds % 3600) // 60
+                    return time(hours, minutes)
+                return td
+
             # Gerar slots de horários
             horarios = []
             if hora_inicio and hora_final:
+                hora_inicio = timedelta_para_time(hora_inicio)
+                hora_final = timedelta_para_time(hora_final)
                 h_inicio = datetime.combine(data_obj, hora_inicio)
                 h_final = datetime.combine(data_obj, hora_final)
                 intervalo_min = unidade['intervalo'] or 30
