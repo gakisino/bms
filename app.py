@@ -237,7 +237,7 @@ def agendamento():
                    a.unidades_id, a.id_operadores,
                    COALESCE(a.confirmacao, 'N') as confirmado,
                    COALESCE(a.compareceu, 'N') as compareceu,
-                   u.nome as unidade_nome, u.sigla as unidade_sigla, o.nome as operador_nome
+                   u.nome as unidade_nome, u.sigla as unidade_sigla, u.cor_bg, u.cor_texto, o.nome as operador_nome
             FROM agendamento a
             LEFT JOIN unidades u ON a.unidades_id = u.id
             LEFT JOIN operadores o ON a.id_operadores = o.id
@@ -416,7 +416,7 @@ def agenda():
     data_sel    = request.args.get('data', date.today().isoformat())
     unidade_sel = request.args.get('unidade', '')
 
-    query  = """SELECT a.*, u.nome as unidade_nome FROM agendamento a
+    query  = """SELECT a.*, u.nome as unidade_nome, u.sigla, u.cor_bg, u.cor_texto FROM agendamento a
                 JOIN unidades u ON a.unidades_id = u.id WHERE a.data = %s"""
     params = [data_sel]
     if unidade_sel:
@@ -1493,7 +1493,7 @@ def agendamento_bloqueio():
 
         with get_cursor() as (_, cursor):
             cursor.execute(f"""
-                SELECT ab.*, u.nome as unidade_nome
+                SELECT ab.*, u.nome as unidade_nome, u.sigla, u.cor_bg, u.cor_texto
                 FROM agendamento_bloqueio ab
                 LEFT JOIN unidades u ON ab.unidades_id = u.id
                 ORDER BY {ordem_sql}

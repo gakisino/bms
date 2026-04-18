@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from 'macros.html' import btn_novo, th_sort %}
+{% from 'macros.html' import btn_novo, th_sort, badge_unidade %}
 
 {% block content %}
 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px;">
@@ -36,11 +36,7 @@
             {% if bloqueios %}
                 {% for b in bloqueios %}
                 <tr style="border-bottom: 1px solid #f1f5f9; transition: 0.2s;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='white'">
-                    <td style="padding: 15px; color: #64748b;">
-                        <span style="background: #e0e7ff; color: #4338ca; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 600;">
-                            {{ b.unidade_nome or '—' }}
-                        </span>
-                    </td>
+                    <td style="padding: 15px;">{{ badge_unidade(b) }}</td>
                     <td style="padding: 15px; font-weight: 600; color: #1e293b;">{{ b.data_inicio.strftime('%d/%m/%Y') if b.data_inicio else '—' }}</td>
                     <td style="padding: 15px; font-weight: 600; color: #1e293b;">{{ b.data_final.strftime('%d/%m/%Y') if b.data_final else '—' }}</td>
                     <td style="padding: 15px; color: #64748b; font-size: 13px;">

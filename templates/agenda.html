@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from 'macros.html' import badge_unidade %}
 
 {% block content %}
 <style>
@@ -84,7 +85,7 @@
                         onclick="editarAgendamento('{{ a.id }}')">
                         <strong style="color: #4f46e5;">{{ a.nome }}</strong>
                         <div style="font-size: 11px; color: #64748b; margin-top: 4px;">
-                            🕒 {{ "%02d:%02d" | format(h_p, m_p) }} • {{ a.unidade_nome or a.sigla }}
+                            🕒 {{ "%02d:%02d" | format(h_p, m_p) }} • {{ badge_unidade(a) }}
                         </div>
                     </div>
                 {% endfor %}

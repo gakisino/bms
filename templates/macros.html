@@ -93,6 +93,23 @@
 {% endmacro %}
 
 
+{# ----------------------------------------------------------
+   badge_unidade(unidade, show_nome=False)
+   Badge colorido para unidade com cores personalizadas.
+   unidade  — objeto unidade com cor_bg, cor_texto, sigla, nome
+   show_nome — se True, mostra nome completo; se False, apenas sigla
+   ---------------------------------------------------------- #}
+{% macro badge_unidade(unidade, show_nome=False) %}
+{% if unidade %}
+    <span style="background:{{ unidade.get('cor_bg') or '#e0e7ff' }}; color:{{ unidade.get('cor_texto') or '#4f46e5' }}; padding:4px 12px; border-radius:8px; font-size:12px; font-weight:700; display:inline-block;">
+        {{ unidade.get('nome') if show_nome else unidade.get('sigla') or '—' }}
+    </span>
+{% else %}
+    <span style="background:#f1f5f9; color:#64748b; padding:4px 12px; border-radius:8px; font-size:12px; font-weight:700;">—</span>
+{% endif %}
+{% endmacro %}
+
+
 {% macro th_sort(col, label, sort, order, align='left', extra_params='') %}
 {% set is_active  = sort == col %}
 {% set next_order = 'desc' if (is_active and order == 'asc') else 'asc' %}
