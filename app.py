@@ -1581,6 +1581,7 @@ def deletar_bloqueio(id):
 # 📅 AGENDA VISUAL (Agendamento de Visitas)
 @app.route('/agenda_visual')
 @login_required
+@acesso_alteracao_required('agendamento')
 def agenda_visual():
     """Tela visual de agendamento de visitas"""
     from datetime import datetime, timedelta
@@ -1599,6 +1600,7 @@ def agenda_visual():
 
 @app.route('/api/horarios', methods=['GET'])
 @login_required
+@acesso_alteracao_required('agendamento')
 def api_horarios():
     """API para obter horários e agendamentos de uma unidade/data"""
     from datetime import datetime, timedelta, time
