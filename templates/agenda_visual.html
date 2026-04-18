@@ -8,14 +8,17 @@
 <!-- SELEÇÃO DE UNIDADE E DATA -->
 <div style="background: white; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); padding: 20px; margin-bottom: 25px; border: 1px solid #f1f5f9;">
     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: flex-end;">
-        <div>
-            <label class="label-form" style="display: block; margin-bottom: 8px;">Unidade *</label>
-            <select id="selectUnidade" class="input-form" style="width: 100%;">
-                <option value="">— Selecione uma unidade —</option>
-                {% for u in unidades %}
-                <option value="{{ u.id }}" data-intervalo="{{ u.intervalo }}">{{ u.sigla }} - {{ u.nome }}</option>
-                {% endfor %}
-            </select>
+        <div style="display: flex; gap: 12px; align-items: flex-end;">
+            <div style="flex: 1;">
+                <label class="label-form" style="display: block; margin-bottom: 8px;">Unidade *</label>
+                <select id="selectUnidade" class="input-form" style="width: 100%;">
+                    <option value="">— Selecione uma unidade —</option>
+                    {% for u in unidades %}
+                    <option value="{{ u.id }}" data-intervalo="{{ u.intervalo }}" data-cor_bg="{{ u.cor_bg or '#e0e7ff' }}" data-cor_texto="{{ u.cor_texto or '#4f46e5' }}" data-sigla="{{ u.sigla }}">{{ u.sigla }} - {{ u.nome }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div id="badgeUnidadeSelecionada" style="padding: 10px 16px; border-radius: 8px; font-weight: 700; font-size: 13px; background: #f1f5f9; color: #64748b; min-width: 60px; text-align: center;">—</div>
         </div>
 
         <div style="display: flex; gap: 10px; align-items: center;">
@@ -114,11 +117,33 @@
 <script>
 let unidadeSelecionada = null;
 
+function atualizarBadgeUnidade() {
+    const selectUnidade = document.getElementById('selectUnidade');
+    const option = selectUnidade.options[selectUnidade.selectedIndex];
+    const badge = document.getElementById('badgeUnidadeSelecionada');
+
+    if (selectUnidade.value === '') {
+        badge.style.background = '#f1f5f9';
+        badge.style.color = '#64748b';
+        badge.textContent = '—';
+    } else {
+        const corBg = option.getAttribute('data-cor_bg') || '#e0e7ff';
+        const corTexto = option.getAttribute('data-cor_texto') || '#4f46e5';
+        const sigla = option.getAttribute('data-sigla') || '—';
+        badge.style.background = corBg;
+        badge.style.color = corTexto;
+        badge.textContent = sigla;
+    }
+}
+
 // Carregar data padrão
 document.getElementById('selectData').valueAsDate = new Date();
 
 // Evento ao selecionar unidade
-document.getElementById('selectUnidade').addEventListener('change', carregarHorarios);
+document.getElementById('selectUnidade').addEventListener('change', function() {
+    atualizarBadgeUnidade();
+    carregarHorarios();
+});
 
 // Evento ao mudar data
 document.getElementById('selectData').addEventListener('change', carregarHorarios);
