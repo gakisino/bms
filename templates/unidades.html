@@ -37,7 +37,9 @@
             {% if unidades %}
                 {% for u in unidades %}
                 <tr style="border-bottom: 1px solid #f1f5f9; transition: 0.2s;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='white'">
-                    <td style="padding: 15px; font-weight: 700; color: #6366f1; font-size: 13px;">{{ u.sigla }}</td>
+                    <td style="padding: 15px;">
+                        <span data-unidade-id="{{ u.id }}" data-cor="{{ u.cor_bg or '#e0e7ff' }}" data-texto="{{ u.cor_texto or '#4f46e5' }}" style="background:{{ u.cor_bg or '#e0e7ff' }}; color:{{ u.cor_texto or '#4f46e5' }}; padding:4px 12px; border-radius:8px; font-size:13px; font-weight:700;">{{ u.sigla }}</span>
+                    </td>
                     <td style="padding: 15px; font-weight: 600; color: #1e293b;">{{ u.nome }}</td>
                     <td style="padding: 15px; color: #64748b;">{{ u.telefone or '—' }}</td>
                     <td style="padding: 15px; color: #64748b;">{{ u.cidade or '—' }}</td>
@@ -151,6 +153,21 @@
                     <input type="number" name="agendamento_quantidade" id="f_agendamento_quantidade" class="input-form" value="10" placeholder="10">
                 </div>
 
+                <div style="grid-column: span 2;">
+                    <label class="label-form">Cor de Fundo (para badge)</label>
+                    <input type="color" name="cor_bg" id="f_cor_bg" class="input-form" value="#e0e7ff" style="height: 45px;">
+                </div>
+
+                <div style="grid-column: span 2;">
+                    <label class="label-form">Cor do Texto</label>
+                    <input type="color" name="cor_texto" id="f_cor_texto" class="input-form" value="#4f46e5" style="height: 45px;">
+                </div>
+
+                <div style="grid-column: span 2; margin-bottom: 20px; padding: 14px; background: #f8fafc; border-radius: 10px;">
+                    <p style="font-size: 11px; color: #64748b; text-transform: uppercase; margin-bottom: 8px; font-weight: 700;">Preview</p>
+                    <div id="u_preview" style="padding: 8px 14px; border-radius: 8px; font-size: 12px; font-weight: 700; background: #e0e7ff; color: #4f46e5; display: inline-block;">SAN</div>
+                </div>
+
             </div>
 
             <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 25px;">
@@ -165,10 +182,23 @@
 <form id="formDeleteUnidade" method="POST" style="display:none;"></form>
 
 <script>
+function atualizarPreviewUnidade() {
+    var corBg = document.getElementById('f_cor_bg').value;
+    var corTexto = document.getElementById('f_cor_texto').value;
+    var sigla = document.getElementById('f_sigla').value || 'SAN';
+    var preview = document.getElementById('u_preview');
+    preview.style.background = corBg;
+    preview.style.color = corTexto;
+    preview.textContent = sigla.toUpperCase();
+}
+
 function abrirModalUnidade() {
     document.getElementById('f_id_unidade').value = '';
     document.getElementById('modalUnidadeTitle').textContent = 'Nova Unidade';
     document.getElementById('formUnidade').reset();
+    document.getElementById('f_cor_bg').value = '#e0e7ff';
+    document.getElementById('f_cor_texto').value = '#4f46e5';
+    atualizarPreviewUnidade();
     document.getElementById('modalUnidade').style.display = 'flex';
 }
 
@@ -192,9 +222,18 @@ function preencherEdicaoUnidade(id, sigla, nome, endereco, telefone, bairro, cid
     document.getElementById('f_intervalo').value = intervalo;
     document.getElementById('f_agendamento_quantidade').value = agendamento_quantidade;
 
+    var elem = document.querySelector('[data-unidade-id="' + id + '"]');
+    document.getElementById('f_cor_bg').value = elem?.getAttribute('data-cor') || '#e0e7ff';
+    document.getElementById('f_cor_texto').value = elem?.getAttribute('data-texto') || '#4f46e5';
+    atualizarPreviewUnidade();
+
     document.getElementById('modalUnidadeTitle').textContent = 'Editar Unidade';
     document.getElementById('modalUnidade').style.display = 'flex';
 }
+
+document.getElementById('f_cor_bg')?.addEventListener('input', atualizarPreviewUnidade);
+document.getElementById('f_cor_texto')?.addEventListener('input', atualizarPreviewUnidade);
+document.getElementById('f_sigla')?.addEventListener('input', atualizarPreviewUnidade);
 
 // Fechar modal ao clicar fora
 document.getElementById('modalUnidade').addEventListener('click', function(e) {
