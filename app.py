@@ -1697,7 +1697,9 @@ def api_horarios():
 
                     # Se o bloqueio tem horários específicos
                     if bloqueio['hora_inicio'] and bloqueio['hora_final']:
-                        if bloqueio['hora_inicio'] <= hora_obj < bloqueio['hora_final']:
+                        h_inicio_bloqueio = timedelta_para_time(bloqueio['hora_inicio'])
+                        h_final_bloqueio = timedelta_para_time(bloqueio['hora_final'])
+                        if h_inicio_bloqueio <= hora_obj < h_final_bloqueio:
                             slot['status'] = 'bloqueado'
                             slot['motivo'] = bloqueio.get('motivo', 'Bloqueado')
                     else:
