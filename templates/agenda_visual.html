@@ -18,11 +18,14 @@
             </select>
         </div>
 
-        <div style="display: flex; gap: 10px; align-items: center;">
+        <div style="display: flex; gap: 10px; align-items: flex-end;">
             <button type="button" onclick="mudarData(-1)" style="padding: 10px 15px; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 8px; cursor: pointer; font-weight: 600;">
                 ← Anterior
             </button>
-            <input type="date" id="selectData" class="input-form" style="flex: 1; text-align: center;">
+            <div style="flex: 1; display: flex; align-items: flex-end; gap: 8px;">
+                <input type="date" id="selectData" class="input-form" style="text-align: center; flex: 1;">
+                <span id="diaSemanaLabel" style="font-size: 12px; color: #94a3b8; font-weight: 600; white-space: nowrap; padding-bottom: 12px;">Selecione</span>
+            </div>
             <button type="button" onclick="mudarData(1)" style="padding: 10px 15px; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 8px; cursor: pointer; font-weight: 600;">
                 Próximo →
             </button>
@@ -59,14 +62,34 @@
     </div>
 </div>
 
+<!-- MODAL DE CONFIRMAÇÃO DE AGENDAMENTO -->
+<div id="modalConfirmacaoAgendamento" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 10001; align-items: center; justify-content: center; backdrop-filter: blur(4px);">
+    <div style="background: white; width: 90%; max-width: 400px; border-radius: 16px; padding: 30px; text-align: center;">
+        <div style="background: #dbeafe; width: 60px; height: 60px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px;">
+            <i data-lucide="calendar-check" style="color: #0284c7; width: 30px;"></i>
+        </div>
+        <h3 id="tituloConfirmacaoAgendamento" style="margin-bottom: 10px; color: #1e293b; font-weight: 700;">Confirmar Agendamento</h3>
+        <p id="mensagemConfirmacaoAgendamento" style="color: #64748b; margin-bottom: 25px; line-height: 1.5; font-size: 14px;"></p>
+        <div style="display: flex; gap: 10px;">
+            <button type="button" onclick="fecharConfirmacaoAgendamento()" style="flex: 1; padding: 12px; border-radius: 10px; border: 1px solid #ddd; background: white; cursor: pointer; font-weight: 600; color: #64748b;">Cancelar</button>
+            <button type="button" onclick="submeterFormularioAgendamento()" style="flex: 1; padding: 12px; border-radius: 10px; background: #0284c7; color: white; text-decoration: none; font-weight: bold; cursor: pointer; border: none;">Confirmar</button>
+        </div>
+    </div>
+</div>
+
 <!-- MODAL DE AGENDAMENTO -->
 <div id="modalAgendamento" style="display: none; position: fixed; inset: 0; background: rgba(15,23,42,0.7); z-index: 9999; align-items: center; justify-content: center; backdrop-filter: blur(4px);">
     <div style="background: white; width: 95%; max-width: 600px; border-radius: 20px; padding: 30px; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);">
         <h2 style="color:#1e293b; font-weight:700; margin-bottom: 20px;">Novo Agendamento</h2>
 
-        <form id="formAgendamento" method="POST" action="/agendamento/salvar">
+        <div id="erroValidacao" style="display: none; background: #fee2e2; border: 1px solid #fecaca; color: #dc2626; padding: 12px 15px; border-radius: 8px; margin-bottom: 20px; font-size: 14px; display: flex; align-items: center; gap: 10px;">
+            <i data-lucide="alert-circle" style="width: 20px; height: 20px;"></i>
+            <span id="textoErro"></span>
+        </div>
+
+        <form id="formAgendamento" method="POST" action="/agendamento/salvar" onsubmit="confirmarAgendamento(event)">
             <input type="hidden" name="redirect_url" value="/agenda_visual">
-            <div style="display: grid; grid-template-columns: 1fr; gap: 15px;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px;">
 
                 <div>
                     <label class="label-form">Unidade</label>
@@ -86,17 +109,37 @@
                     <input type="hidden" name="hora" id="modalHoraHidden">
                 </div>
 
-                <div>
-                    <label class="label-form">Nome *</label>
+                <div style="grid-column: 1/4;">
+                    <label class="label-form">Nome do Aluno *</label>
                     <input type="text" name="nome" id="f_nome" required class="input-form" placeholder="Nome completo">
                 </div>
 
                 <div>
                     <label class="label-form">Telefone *</label>
-                    <input type="text" name="telefone" id="f_telefone" required class="input-form" placeholder="(11) 98765-4321">
+                    <input type="text" name="telefone" id="f_telefone" required class="input-form" placeholder="(00) 00000-0000" maxlength="15" oninput="mascaraTelefonAgendaVisual(event)">
                 </div>
 
                 <div>
+                    <label class="label-form">Idade</label>
+                    <input type="number" name="idade" id="f_idade" class="input-form" placeholder="Ex: 15" min="7" max="68">
+                </div>
+
+                <div style="grid-column: 1/4;">
+                    <label class="label-form">Responsável</label>
+                    <input type="text" name="responsavel" id="f_responsavel" class="input-form" placeholder="Nome do responsável">
+                </div>
+
+                <div style="grid-column: 1/4;">
+                    <label class="label-form">Operador Responsável *</label>
+                    <select name="id_operadores" id="f_operador" required class="input-form" style="width: 100%; background: white; color: #1e293b;">
+                        <option value="">— Selecione um operador —</option>
+                        {% for o in operadores %}
+                        <option value="{{ o.id }}">{{ o.nome }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div style="grid-column: 1/4;">
                     <label class="label-form">Observação</label>
                     <textarea name="observacao" id="f_observacao" class="input-form" style="resize: vertical; min-height: 80px;" placeholder="Informações adicionais..."></textarea>
                 </div>
@@ -104,8 +147,14 @@
             </div>
 
             <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 25px;">
-                <button type="button" onclick="fecharModalAgendamento()" style="padding:10px 20px; background:#f1f5f9; color:#64748b; border:1px solid #e2e8f0; border-radius:10px; cursor:pointer; font-weight:600;">Cancelar</button>
-                <button type="submit" style="padding:10px 20px; background:#6366f1; color:white; border:none; border-radius:10px; cursor:pointer; font-weight:600;">Agendar</button>
+                <button type="button" onclick="fecharModalAgendamento()" style="padding:10px 20px; background:#f1f5f9; color:#64748b; border:1px solid #e2e8f0; border-radius:10px; cursor:pointer; font-weight:600; display:flex; flex-direction:column; align-items:center; gap:2px; line-height:1.2;">
+                    <span>Cancelar</span>
+                    <span style="font-size:10px; opacity:0.7;">(esc)</span>
+                </button>
+                <button type="submit" style="padding:10px 20px; background:#6366f1; color:white; border:none; border-radius:10px; cursor:pointer; font-weight:600; display:flex; flex-direction:column; align-items:center; gap:2px; line-height:1.2;">
+                    <span>Agendar</span>
+                    <span style="font-size:10px; opacity:0.9;">(alt + i)</span>
+                </button>
             </div>
         </form>
     </div>
@@ -145,8 +194,35 @@ document.getElementById('selectUnidade').addEventListener('change', function() {
 // Aplicar cores iniciais quando página carrega
 atualizarBadgeUnidade();
 
+// Função para atualizar o dia da semana
+function atualizarDiaSemana() {
+    const dataInput = document.getElementById('selectData');
+    const labelDia = document.getElementById('diaSemanaLabel');
+    const valor = dataInput.value;
+
+    if (!valor) {
+        labelDia.textContent = 'Selecione';
+        return;
+    }
+
+    // Criar data de forma correta para evitar problemas de timezone
+    const [ano, mes, dia] = valor.split('-');
+    const data = new Date(ano, mes - 1, dia);
+
+    const diasSemana = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+    const nomeDia = diasSemana[data.getDay()];
+
+    labelDia.textContent = nomeDia;
+}
+
 // Evento ao mudar data
-document.getElementById('selectData').addEventListener('change', carregarHorarios);
+document.getElementById('selectData').addEventListener('change', function() {
+    atualizarDiaSemana();
+    carregarHorarios();
+});
+
+// Atualizar dia da semana na inicialização
+atualizarDiaSemana();
 
 function carregarHorarios() {
     const unidadeId = document.getElementById('selectUnidade').value;
@@ -228,7 +304,25 @@ function mudarData(dias) {
     const data = new Date(input.valueAsDate);
     data.setDate(data.getDate() + dias);
     input.valueAsDate = data;
+    atualizarDiaSemana();
     carregarHorarios();
+}
+
+function mascaraTelefonAgendaVisual(e) {
+    let input = e.target;
+    let valor = input.value.replace(/\D/g, '');
+
+    if (valor.length > 11) valor = valor.slice(0, 11);
+
+    if (valor.length > 7) {
+        valor = '(' + valor.slice(0, 2) + ') ' + valor.slice(2, 7) + '-' + valor.slice(7);
+    } else if (valor.length > 2) {
+        valor = '(' + valor.slice(0, 2) + ') ' + valor.slice(2);
+    } else if (valor.length > 0) {
+        valor = '(' + valor;
+    }
+
+    input.value = valor;
 }
 
 function abrirModalAgendamento(hora) {
@@ -236,18 +330,84 @@ function abrirModalAgendamento(hora) {
     const unidadeText = document.getElementById('selectUnidade').options[document.getElementById('selectUnidade').selectedIndex].text;
     const data = document.getElementById('selectData').value;
 
+    // Converter data YYYY-MM-DD para dd/mm/yyyy
+    const [ano, mes, dia] = data.split('-');
+    const dataFormatada = `${dia}/${mes}/${ano}`;
+
     document.getElementById('modalUnidade').value = unidadeText;
     document.getElementById('modalUnidadeId').value = unidadeId;
-    document.getElementById('modalData').value = data;
+    document.getElementById('modalData').value = dataFormatada;
     document.getElementById('modalDataHidden').value = data;
     document.getElementById('modalHora').value = hora;
     document.getElementById('modalHoraHidden').value = hora;
 
     document.getElementById('f_nome').value = '';
     document.getElementById('f_telefone').value = '';
+    document.getElementById('f_idade').value = '';
+    document.getElementById('f_responsavel').value = '';
+    document.getElementById('f_operador').value = '{{ operador_usuario or "" }}';
     document.getElementById('f_observacao').value = '';
 
+    limparErroValidacao();
     document.getElementById('modalAgendamento').style.display = 'flex';
+}
+
+function mostraErroValidacao(mensagem, campoId) {
+    document.getElementById('textoErro').innerText = mensagem;
+    document.getElementById('erroValidacao').style.display = 'flex';
+    document.getElementById(campoId).focus();
+    document.getElementById(campoId).style.borderColor = '#ef4444';
+}
+
+function limparErroValidacao() {
+    document.getElementById('erroValidacao').style.display = 'none';
+    document.getElementById('textoErro').innerText = '';
+    document.querySelectorAll('[id^="f_"]').forEach(el => {
+        el.style.borderColor = '';
+    });
+}
+
+function confirmarAgendamento(event) {
+    event.preventDefault();
+
+    const nomeAluno = document.getElementById('f_nome').value.trim();
+    const telefone = document.getElementById('f_telefone').value.trim();
+    const operador = document.getElementById('f_operador').value.trim();
+    const data = document.getElementById('modalData').value;
+    const hora = document.getElementById('modalHora').value;
+    const unidade = document.getElementById('modalUnidade').value;
+
+    // Validações
+    if (!nomeAluno) {
+        mostraErroValidacao('Nome do aluno é obrigatório', 'f_nome');
+        return;
+    }
+
+    if (!telefone) {
+        mostraErroValidacao('Telefone é obrigatório', 'f_telefone');
+        return;
+    }
+
+    if (!operador) {
+        mostraErroValidacao('Operador responsável é obrigatório', 'f_operador');
+        return;
+    }
+
+    limparErroValidacao();
+    const mensagem = `Agendamento para <strong>${data}</strong> às <strong>${hora}</strong><br>Aluno: <strong>${nomeAluno}</strong><br>Unidade: <strong>${unidade}</strong>`;
+
+    document.getElementById('tituloConfirmacaoAgendamento').innerText = 'Confirmar Agendamento';
+    document.getElementById('mensagemConfirmacaoAgendamento').innerHTML = mensagem;
+    document.getElementById('modalConfirmacaoAgendamento').style.display = 'flex';
+}
+
+function fecharConfirmacaoAgendamento() {
+    document.getElementById('modalConfirmacaoAgendamento').style.display = 'none';
+}
+
+function submeterFormularioAgendamento() {
+    fecharConfirmacaoAgendamento();
+    document.getElementById('formAgendamento').submit();
 }
 
 function fecharModalAgendamento() {
@@ -257,6 +417,31 @@ function fecharModalAgendamento() {
 // Fechar modal ao clicar fora
 document.getElementById('modalAgendamento').addEventListener('click', function(e) {
     if (e.target === this) fecharModalAgendamento();
+});
+
+// Fechar modal de confirmação ao clicar fora
+document.getElementById('modalConfirmacaoAgendamento').addEventListener('click', function(e) {
+    if (e.target === this) fecharConfirmacaoAgendamento();
+});
+
+// Atalho Alt+I para agendar
+document.addEventListener('keydown', function(event) {
+    if (event.altKey && event.key.toLowerCase() === 'i') {
+        if (document.getElementById('modalAgendamento').style.display === 'flex') {
+            event.preventDefault();
+            document.getElementById('formAgendamento').dispatchEvent(new Event('submit'));
+        }
+    }
+});
+
+// Atalho Esc para cancelar
+document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape') {
+        if (document.getElementById('modalAgendamento').style.display === 'flex') {
+            event.preventDefault();
+            fecharModalAgendamento();
+        }
+    }
 });
 </script>
 

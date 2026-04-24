@@ -1,6 +1,24 @@
 {% extends "base.html" %}
 {% from 'macros.html' import btn_novo, th_sort, badge_unidade %}
 
+<!-- MODAL DE CONFIRMAÇÃO DE EXCLUSÃO (Padrão Global) -->
+<div id="modalConfirmacaoBloqueio" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 10000; align-items: center; justify-content: center; backdrop-filter: blur(4px);">
+    <div style="background: white; width: 90%; max-width: 400px; border-radius: 16px; padding: 30px; text-align: center;">
+        <div style="background: #fee2e2; width: 60px; height: 60px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px;">
+            <i data-lucide="alert-triangle" style="color: #ef4444; width: 30px;"></i>
+        </div>
+        <h3 id="tituloBloqueio" style="margin-bottom: 10px; color: #1e293b; font-weight: 700;">Confirmar Exclusão</h3>
+        <p id="mensagemBloqueio" style="color: #64748b; margin-bottom: 25px; line-height: 1.5;"></p>
+        <div style="display: flex; gap: 10px;">
+            <button type="button" onclick="fecharConfirmacaoBloqueio()" style="flex: 1; padding: 12px; border-radius: 10px; border: 1px solid #ddd; background: white; cursor: pointer; font-weight: 600; color: #64748b;">Cancelar</button>
+            <button type="button" id="btnExcluirBloqueio" onclick="submeterDeleteBloqueio()" style="flex: 1; padding: 12px; border-radius: 10px; background: #ef4444; color: white; text-decoration: none; font-weight: bold; cursor: pointer; border: none;">Excluir</button>
+        </div>
+    </div>
+</div>
+
+<!-- FORMULÁRIO HIDDEN PARA DELETAR -->
+<form id="formDeleteBloqueio" method="POST" style="display:none;"></form>
+
 {% block content %}
 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px;">
     <h2 style="color: #1e293b; font-weight: 700;">🚫 Bloqueios de Agendamento</h2>
@@ -55,7 +73,7 @@
                                 <i data-lucide="edit-3" style="width: 18px;"></i>
                             </button>
                             <button type="button"
-                                onclick="abrirConfirmacaoGlobal('{{ url_for('deletar_bloqueio', id=b.id) }}', 'Excluir Bloqueio', 'Deseja excluir o bloqueio de <strong>{{ b.data_inicio }} a {{ b.data_final }}</strong>?')"
+                                onclick="abrirConfirmacaoBloqueio({{ b.id }}, '{{ b.data_inicio }}', '{{ b.data_final }}')"
                                 title="Excluir" style="color: #ef4444; background: none; border: none; cursor: pointer;">
                                 <i data-lucide="trash-2" style="width: 18px;"></i>
                             </button>
@@ -153,6 +171,27 @@ function preencherEdicaoBloqueio(id, data_inicio, data_final, hora_inicio, hora_
     document.getElementById('modalBloqueioTitle').textContent = 'Editar Bloqueio';
     document.getElementById('modalBloqueio').style.display = 'flex';
 }
+
+function abrirConfirmacaoBloqueio(id, dataInicio, dataFinal) {
+    document.getElementById('tituloBloqueio').textContent = 'Confirmar Exclusão';
+    document.getElementById('mensagemBloqueio').textContent = `Deseja excluir o bloqueio de ${dataInicio} a ${dataFinal}?`;
+    document.getElementById('formDeleteBloqueio').action = `/agendamento_bloqueio/deletar/${id}`;
+    document.getElementById('modalConfirmacaoBloqueio').style.display = 'flex';
+}
+
+function fecharConfirmacaoBloqueio() {
+    document.getElementById('modalConfirmacaoBloqueio').style.display = 'none';
+}
+
+function submeterDeleteBloqueio() {
+    fecharConfirmacaoBloqueio();
+    document.getElementById('formDeleteBloqueio').submit();
+}
+
+// Fechar modal de confirmação ao clicar fora
+document.getElementById('modalConfirmacaoBloqueio').addEventListener('click', function(e) {
+    if (e.target === this) fecharConfirmacaoBloqueio();
+});
 
 // Fechar modal ao clicar fora
 document.getElementById('modalBloqueio').addEventListener('click', function(e) {

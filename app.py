@@ -284,16 +284,29 @@ def agendamento():
 @acesso_alteracao_required('visitas')
 def salvar_agendamento():
     id_ag       = request.form.get('id')
-    nome        = request.form.get('nome')
+    nome        = request.form.get('nome', '').strip()
     data        = request.form.get('data')
     hora        = request.form.get('hora')
     unidade     = request.form.get('unidades_id')
-    operador    = request.form.get('id_operadores') or None
+    operador    = request.form.get('id_operadores')
     idade       = request.form.get('idade')
     responsavel = request.form.get('responsavel')
     telefone    = re.sub(r'\D', '', request.form.get('telefone', ''))  # Remove máscara
     observacao  = request.form.get('observacao')
     redirect_url = request.form.get('redirect_url', '/agendamento?ok=salvo')
+
+    # Validações
+    if not nome:
+        error_redirect = f"{redirect_url}?erro=nome_vazio" if '?' not in redirect_url else f"{redirect_url}&erro=nome_vazio"
+        return redirect(error_redirect)
+
+    if not telefone:
+        error_redirect = f"{redirect_url}?erro=telefone_vazio" if '?' not in redirect_url else f"{redirect_url}&erro=telefone_vazio"
+        return redirect(error_redirect)
+
+    if not operador:
+        error_redirect = f"{redirect_url}?erro=operador_vazio" if '?' not in redirect_url else f"{redirect_url}&erro=operador_vazio"
+        return redirect(error_redirect)
 
     try:
         with get_cursor(dictionary=False) as (_, cursor):
@@ -515,13 +528,13 @@ def operadores():
             request.form.get('cidade'), request.form.get('uf'), request.form.get('cpf'),
             request.form.get('rg'), request.form.get('pix'), request.form.get('contato'),
             request.form.get('telefone_contato'), request.form.get('id_perfil') or None,
-            request.form.get('status', 'A')
+            request.form.get('id_usuarios') or None, request.form.get('status', 'A')
         )
         try:
             with get_cursor(dictionary=False) as (_, cursor):
                 cursor.execute("""INSERT INTO operadores
-                    (nome, codigo, telefone, nascimento, endereco, cidade, uf, cpf, rg, pix, contato, telefone_contato, id_perfil, status)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""", dados)
+                    (nome, codigo, telefone, nascimento, endereco, cidade, uf, cpf, rg, pix, contato, telefone_contato, id_perfil, id_usuarios, status)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""", dados)
         except Exception as e:
             print(f"Erro ao inserir operador: {e}")
             return redirect(url_for('operadores', erro='salvar'))
@@ -547,8 +560,10 @@ def operadores():
         lista = cursor.fetchall()
         cursor.execute("SELECT id, nome FROM perfil ORDER BY nome")
         perfis = cursor.fetchall()
+        cursor.execute("SELECT id, nome FROM usuarios ORDER BY nome")
+        usuarios = cursor.fetchall()
 
-    return render_template('operadores.html', operadores=lista, perfis=perfis,
+    return render_template('operadores.html', operadores=lista, perfis=perfis, usuarios=usuarios,
                            busca=busca, sort=sort, order=order)
 
 
@@ -561,13 +576,13 @@ def editar_operador(id):
         request.form.get('cidade'), request.form.get('uf'), request.form.get('cpf'),
         request.form.get('rg'), request.form.get('pix'), request.form.get('contato'),
         request.form.get('telefone_contato'), request.form.get('id_perfil') or None,
-        request.form.get('status', 'A'), id
+        request.form.get('id_usuarios') or None, request.form.get('status', 'A'), id
     )
     try:
         with get_cursor(dictionary=False) as (_, cursor):
             cursor.execute("""UPDATE operadores SET nome=%s, codigo=%s, telefone=%s, nascimento=%s, endereco=%s,
                 cidade=%s, uf=%s, cpf=%s, rg=%s, pix=%s, contato=%s, telefone_contato=%s,
-                id_perfil=%s, status=%s WHERE id=%s""", dados)
+                id_perfil=%s, id_usuarios=%s, status=%s WHERE id=%s""", dados)
     except Exception as e:
         print(f"Erro ao editar operador: {e}")
         return redirect(url_for('operadores', erro='salvar'))
@@ -1589,15 +1604,27 @@ def agenda_visual():
     from datetime import datetime, timedelta
 
     try:
-        # Obter unidades
+        # Obter unidades e operadores
         with get_cursor() as (_, cursor):
             cursor.execute("SELECT id, nome, sigla, intervalo, hora_inicio, hora_final, hora_inicio_sab, hora_final_sab FROM unidades ORDER BY nome")
             unidades_list = cursor.fetchall()
+            cursor.execute("SELECT id, nome FROM operadores ORDER BY nome")
+            operadores_list = cursor.fetchall()
 
-        return render_template('agenda_visual.html', unidades=unidades_list, data_padrao=datetime.now().strftime('%Y-%m-%d'))
+            # Buscar operador associado ao usuário logado
+            usuario_id = session.get('usuario_id')
+            operador_usuario = None
+            if usuario_id:
+                cursor.execute("SELECT id FROM operadores WHERE id_usuarios=%s LIMIT 1", (usuario_id,))
+                resultado = cursor.fetchone()
+                if resultado:
+                    operador_usuario = resultado['id']
+
+        return render_template('agenda_visual.html', unidades=unidades_list, operadores=operadores_list,
+                             operador_usuario=operador_usuario, data_padrao=datetime.now().strftime('%Y-%m-%d'))
     except Exception as e:
         print(f"[ERRO] Agenda visual: {e}")
-        return render_template('agenda_visual.html', unidades=[], erro="Erro ao carregar agenda")
+        return render_template('agenda_visual.html', unidades=[], operadores=[], erro="Erro ao carregar agenda")
 
 
 @app.route('/api/horarios', methods=['GET'])
@@ -1617,6 +1644,11 @@ def api_horarios():
         data_obj = datetime.strptime(data, '%Y-%m-%d').date()
         dia_semana = data_obj.weekday()  # 0=seg, 5=sab, 6=dom
         eh_sabado = dia_semana == 5
+        eh_domingo = dia_semana == 6
+
+        # Se for domingo, retornar lista vazia
+        if eh_domingo:
+            return jsonify({'horarios': []}), 200
 
         with get_cursor() as (_, cursor):
             # Obter info da unidade

@@ -432,6 +432,9 @@
         if (params.get('ok')    === 'deletado')                 showToast('Registro excluído com sucesso!', 'sucesso');
         if (params.get('erro')  === 'salvar')                   showToast('Erro ao salvar. Tente novamente.', 'erro');
         if (params.get('erro')  === 'deletar')                  showToast('Erro ao excluir. Verifique os vínculos.', 'erro');
+        if (params.get('erro')  === 'nome_vazio')              showToast('Nome do aluno é obrigatório.', 'erro');
+        if (params.get('erro')  === 'telefone_vazio')          showToast('Telefone é obrigatório.', 'erro');
+        if (params.get('erro')  === 'operador_vazio')          showToast('Operador responsável é obrigatório.', 'erro');
 
         const checkbox = document.getElementById('toggle-sidebar');
         const savedState = localStorage.getItem('sidebar-collapsed');

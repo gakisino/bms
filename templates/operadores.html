@@ -42,7 +42,7 @@
                 <td style="padding: 15px; text-align: center;">
                     <div style="display:flex; justify-content:center; gap:12px;">
                         <button type="button"
-                            onclick="preencherEdicao('{{ op.id }}','{{ op.nome }}','{{ op.codigo }}','{{ op.telefone }}','{{ op.cpf }}','{{ op.rg }}','{{ op.nascimento }}','{{ op.cidade }}','{{ op.uf }}','{{ op.endereco }}','{{ op.pix }}','{{ op.contato }}','{{ op.telefone_contato }}','{{ op.id_perfil }}','{{ op.status }}')"
+                            onclick="preencherEdicao('{{ op.id }}','{{ op.nome }}','{{ op.codigo }}','{{ op.telefone }}','{{ op.cpf }}','{{ op.rg }}','{{ op.nascimento }}','{{ op.cidade }}','{{ op.uf }}','{{ op.endereco }}','{{ op.pix }}','{{ op.contato }}','{{ op.telefone_contato }}','{{ op.id_perfil }}','{{ op.status }}','{{ op.id_usuarios }}')"
                             title="Editar" style="color: #6366f1; background: none; border: none; cursor: pointer;">
                             <i data-lucide="edit-3" style="width: 18px;"></i>
                         </button>
@@ -82,6 +82,16 @@
                         <option value="">— Selecione —</option>
                         {% for p in perfis %}
                         <option value="{{ p.id }}">{{ p.nome }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label class="label-form">Usuário</label>
+                    <select name="id_usuarios" id="f_usuario" class="input-form">
+                        <option value="">— Selecione —</option>
+                        {% for u in usuarios %}
+                        <option value="{{ u.id }}">{{ u.nome }}</option>
                         {% endfor %}
                     </select>
                 </div>
@@ -166,7 +176,7 @@
         document.getElementById('modalOp').style.display = 'flex';
     }
 
-    function preencherEdicao(id, nome, codigo, tel, cpf, rg, nasc, cid, uf, end, pix, cont, telc, id_perfil, status) {
+    function preencherEdicao(id, nome, codigo, tel, cpf, rg, nasc, cid, uf, end, pix, cont, telc, id_perfil, status, id_usuarios) {
         document.getElementById('modalTitle').innerText = "Editar Operador";
         document.getElementById('formOp').action = "/operadores/editar/" + id;
 
@@ -184,6 +194,7 @@
         document.getElementById('f_contato').value    = limpa(cont);
         document.getElementById('f_telcontato').value = limpa(telc);
         document.getElementById('f_perfil').value     = limpa(id_perfil);
+        document.getElementById('f_usuario').value    = limpa(id_usuarios);
         document.getElementById('f_status').value     = limpa(status) || 'A';
 
         document.getElementById('modalOp').style.display = 'flex';
