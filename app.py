@@ -142,59 +142,77 @@ def acesso_rotina_required(nome_rotina):
 @app.route('/', methods=['GET', 'POST'])
 def login():
 
-    if request.method == 'POST':    
+    if request.method == 'POST':
         email = request.form['email']
         senha = request.form['senha']
+        print(f"[LOGIN] Tentativa: {email}")
 
-        with get_cursor() as (_, cursor):
-            cursor.execute("SELECT * FROM usuarios WHERE email = %s", (email,))
-            usuario = cursor.fetchone()
+        try:
+            with get_cursor() as (_, cursor):
+                cursor.execute("SELECT * FROM usuarios WHERE email = %s", (email,))
+                usuario = cursor.fetchone()
+            print(f"[LOGIN] Usuario encontrado: {usuario is not None}")
 
-        # 🔴 EMAIL NÃO EXISTE
-        if not usuario:
-            return render_template('login.html', erro="Email não cadastrado")
+            # 🔴 EMAIL NÃO EXISTE
+            if not usuario:
+                print(f"[LOGIN] Email não cadastrado: {email}")
+                return render_template('login.html', erro="Email não cadastrado")
 
-        # 🔴 USUÁRIO JÁ BLOQUEADO
-        if usuario['ativo'] == 'B':
-            return render_template('login.html', erro="Usuário bloqueado. Entre em contato com o administrador.")
+            # 🔴 USUÁRIO JÁ BLOQUEADO
+            if usuario['ativo'] == 'B':
+                print(f"[LOGIN] Usuario bloqueado: {email}")
+                return render_template('login.html', erro="Usuário bloqueado. Entre em contato com o administrador.")
 
-        # 🔴 USUÁRIO INATIVO
-        if usuario['ativo'] != 'A':
-            return render_template('login.html', erro="Usuário não autorizado. Entre em contato com o administrador.")
+            # 🔴 USUÁRIO INATIVO
+            if usuario['ativo'] != 'A':
+                print(f"[LOGIN] Usuario inativo: {email}")
+                return render_template('login.html', erro="Usuário não autorizado. Entre em contato com o administrador.")
 
-        # 🔴 SENHA ERRADA
-        if not check_password_hash(usuario['senha'], senha):
-            novas_tentativas = usuario['tentativas'] + 1
+            # 🔴 SENHA ERRADA
+            if not check_password_hash(usuario['senha'], senha):
+                print(f"[LOGIN] Senha incorreta: {email}")
+                novas_tentativas = usuario['tentativas'] + 1
 
-            if novas_tentativas >= 5:
+                if novas_tentativas >= 5:
+                    with get_cursor() as (_, cursor):
+                        cursor.execute(
+                            "UPDATE usuarios SET tentativas=%s, ativo='B' WHERE id=%s",
+                            (novas_tentativas, usuario['id'])
+                        )
+                    return render_template('login.html', erro="Usuário bloqueado após 5 tentativas inválidas. Entre em contato com o administrador.")
+
                 with get_cursor() as (_, cursor):
                     cursor.execute(
-                        "UPDATE usuarios SET tentativas=%s, ativo='B' WHERE id=%s",
+                        "UPDATE usuarios SET tentativas=%s WHERE id=%s",
                         (novas_tentativas, usuario['id'])
                     )
-                return render_template('login.html', erro="Usuário bloqueado após 5 tentativas inválidas. Entre em contato com o administrador.")
+                restantes = 5 - novas_tentativas
+                return render_template('login.html', erro=f"Senha incorreta. {restantes} tentativa(s) restante(s).")
 
+            # ✅ LOGIN OK — zera tentativas e abre sessão
+            print(f"[LOGIN] Senha correta, zerando tentativas: {email}")
             with get_cursor() as (_, cursor):
-                cursor.execute(
-                    "UPDATE usuarios SET tentativas=%s WHERE id=%s",
-                    (novas_tentativas, usuario['id'])
-                )
-            restantes = 5 - novas_tentativas
-            return render_template('login.html', erro=f"Senha incorreta. {restantes} tentativa(s) restante(s).")
+                cursor.execute("UPDATE usuarios SET tentativas=0 WHERE id=%s", (usuario['id'],))
 
-        # ✅ LOGIN OK — zera tentativas e abre sessão
-        with get_cursor() as (_, cursor):
-            cursor.execute("UPDATE usuarios SET tentativas=0 WHERE id=%s", (usuario['id'],))
+            session['usuario_id']    = usuario['id']
+            session['usuario_nome']  = usuario['nome']
+            session['usuario_email'] = usuario['email']
+            print(f"[LOGIN] Sessão criada para: {usuario['nome']} (ID: {usuario['id']})")
 
-        session['usuario_id']    = usuario['id']
-        session['usuario_nome']  = usuario['nome']
-        session['usuario_email'] = usuario['email']
+            # Carrega rotinas que o usuário tem acesso
+            print(f"[LOGIN] Carregando rotinas para usuario {usuario['id']}...")
+            rotinas_acesso = obter_rotinas_acesso_usuario(usuario['id'])
+            session['rotinas_acesso'] = rotinas_acesso
+            print(f"[LOGIN] Rotinas carregadas: {rotinas_acesso}")
 
-        # Carrega rotinas que o usuário tem acesso
-        rotinas_acesso = obter_rotinas_acesso_usuario(usuario['id'])
-        session['rotinas_acesso'] = rotinas_acesso
+            print(f"[LOGIN] Redirecionando para /agendamento")
+            return redirect('/agendamento')
 
-        return redirect('/agendamento')
+        except Exception as e:
+            print(f"[ERRO LOGIN] Exceção não tratada: {e}")
+            import traceback
+            traceback.print_exc()
+            return render_template('login.html', erro=f"Erro interno: {str(e)}")
 
     return render_template('login.html')
 
