@@ -6,7 +6,7 @@ from flask import Flask, render_template, request, redirect, url_for, session, f
 from werkzeug.security import check_password_hash, generate_password_hash
 from datetime import date, datetime
 import mysql.connector
-import os
+import os    
 
 app = Flask(__name__)
 app.secret_key = "segredo_super_secreto"
