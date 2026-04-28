@@ -145,74 +145,56 @@ def login():
     if request.method == 'POST':
         email = request.form['email']
         senha = request.form['senha']
-        print(f"[LOGIN] Tentativa: {email}")
 
-        try:
-            with get_cursor() as (_, cursor):
-                cursor.execute("SELECT * FROM usuarios WHERE email = %s", (email,))
-                usuario = cursor.fetchone()
-            print(f"[LOGIN] Usuario encontrado: {usuario is not None}")
+        with get_cursor() as (_, cursor):
+            cursor.execute("SELECT * FROM usuarios WHERE email = %s", (email,))
+            usuario = cursor.fetchone()
 
-            # 🔴 EMAIL NÃO EXISTE
-            if not usuario:
-                print(f"[LOGIN] Email não cadastrado: {email}")
-                return render_template('login.html', erro="Email não cadastrado")
+        # 🔴 EMAIL NÃO EXISTE
+        if not usuario:
+            return render_template('login.html', erro="Email não cadastrado")
 
-            # 🔴 USUÁRIO JÁ BLOQUEADO
-            if usuario['ativo'] == 'B':
-                print(f"[LOGIN] Usuario bloqueado: {email}")
-                return render_template('login.html', erro="Usuário bloqueado. Entre em contato com o administrador.")
+        # 🔴 USUÁRIO JÁ BLOQUEADO
+        if usuario['ativo'] == 'B':
+            return render_template('login.html', erro="Usuário bloqueado. Entre em contato com o administrador.")
 
-            # 🔴 USUÁRIO INATIVO
-            if usuario['ativo'] != 'A':
-                print(f"[LOGIN] Usuario inativo: {email}")
-                return render_template('login.html', erro="Usuário não autorizado. Entre em contato com o administrador.")
+        # 🔴 USUÁRIO INATIVO
+        if usuario['ativo'] != 'A':
+            return render_template('login.html', erro="Usuário não autorizado. Entre em contato com o administrador.")
 
-            # 🔴 SENHA ERRADA
-            if not check_password_hash(usuario['senha'], senha):
-                print(f"[LOGIN] Senha incorreta: {email}")
-                novas_tentativas = usuario['tentativas'] + 1
+        # 🔴 SENHA ERRADA
+        if not check_password_hash(usuario['senha'], senha):
+            novas_tentativas = usuario['tentativas'] + 1
 
-                if novas_tentativas >= 5:
-                    with get_cursor() as (_, cursor):
-                        cursor.execute(
-                            "UPDATE usuarios SET tentativas=%s, ativo='B' WHERE id=%s",
-                            (novas_tentativas, usuario['id'])
-                        )
-                    return render_template('login.html', erro="Usuário bloqueado após 5 tentativas inválidas. Entre em contato com o administrador.")
-
+            if novas_tentativas >= 5:
                 with get_cursor() as (_, cursor):
                     cursor.execute(
-                        "UPDATE usuarios SET tentativas=%s WHERE id=%s",
+                        "UPDATE usuarios SET tentativas=%s, ativo='B' WHERE id=%s",
                         (novas_tentativas, usuario['id'])
                     )
-                restantes = 5 - novas_tentativas
-                return render_template('login.html', erro=f"Senha incorreta. {restantes} tentativa(s) restante(s).")
+                return render_template('login.html', erro="Usuário bloqueado após 5 tentativas inválidas. Entre em contato com o administrador.")
 
-            # ✅ LOGIN OK — zera tentativas e abre sessão
-            print(f"[LOGIN] Senha correta, zerando tentativas: {email}")
             with get_cursor() as (_, cursor):
-                cursor.execute("UPDATE usuarios SET tentativas=0 WHERE id=%s", (usuario['id'],))
+                cursor.execute(
+                    "UPDATE usuarios SET tentativas=%s WHERE id=%s",
+                    (novas_tentativas, usuario['id'])
+                )
+            restantes = 5 - novas_tentativas
+            return render_template('login.html', erro=f"Senha incorreta. {restantes} tentativa(s) restante(s).")
 
-            session['usuario_id']    = usuario['id']
-            session['usuario_nome']  = usuario['nome']
-            session['usuario_email'] = usuario['email']
-            print(f"[LOGIN] Sessão criada para: {usuario['nome']} (ID: {usuario['id']})")
+        # ✅ LOGIN OK — zera tentativas e abre sessão
+        with get_cursor() as (_, cursor):
+            cursor.execute("UPDATE usuarios SET tentativas=0 WHERE id=%s", (usuario['id'],))
 
-            # Carrega rotinas que o usuário tem acesso
-            print(f"[LOGIN] Carregando rotinas para usuario {usuario['id']}...")
-            rotinas_acesso = obter_rotinas_acesso_usuario(usuario['id'])
-            session['rotinas_acesso'] = rotinas_acesso
-            print(f"[LOGIN] Rotinas carregadas: {rotinas_acesso}")
+        session['usuario_id']    = usuario['id']
+        session['usuario_nome']  = usuario['nome']
+        session['usuario_email'] = usuario['email']
 
-            print(f"[LOGIN] Redirecionando para /agendamento")
-            return redirect('/agendamento')
+        # Carrega rotinas que o usuário tem acesso
+        rotinas_acesso = obter_rotinas_acesso_usuario(usuario['id'])
+        session['rotinas_acesso'] = rotinas_acesso
 
-        except Exception as e:
-            print(f"[ERRO LOGIN] Exceção não tratada: {e}")
-            import traceback
-            traceback.print_exc()
-            return render_template('login.html', erro=f"Erro interno: {str(e)}")
+        return redirect('/agendamento')
 
     return render_template('login.html')
 
@@ -402,6 +384,28 @@ def usuarios():
 def logout():
     session.clear()
     return redirect('/')
+
+
+@app.route('/api/tempo-inatividade')
+@login_required
+def tempo_inatividade():
+    """Retorna o tempo de inatividade em segundos"""
+    try:
+        with get_cursor() as (_, cursor):
+            cursor.execute("SELECT inatividade FROM parametros LIMIT 1")
+            resultado = cursor.fetchone()
+            if resultado:
+                tempo = int(resultado['inatividade']) if resultado['inatividade'] else 1800
+                print(f"[OK] Inatividade carregada: {tempo} segundos")
+            else:
+                tempo = 1800
+                print("[AVISO] Nenhum registro em parametros, usando padrão")
+            return jsonify({'tempo_segundos': tempo})
+    except Exception as e:
+        print(f"[ERRO] tempo_inatividade: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'tempo_segundos': 1800})
 
 
 # 🗑️ DELETAR AGENDAMENTO

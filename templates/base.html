@@ -466,6 +466,34 @@
         const modalG = document.getElementById('modalConfirmacaoGlobal');
         if (event.target == modalG) fecharConfirmacaoGlobal();
     }
+
+    // 🔐 Sistema de Inatividade
+    let tempoInatividade = 1800;
+    let timerInatividade = null;
+
+    function resetarTimer() {
+        clearTimeout(timerInatividade);
+        timerInatividade = setTimeout(function() {
+            console.log('[INATIVIDADE] LOGOUT POR INATIVIDADE');
+            window.location.href = '/logout';
+        }, tempoInatividade * 1000);
+    }
+
+    fetch('/api/tempo-inatividade')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            tempoInatividade = parseInt(data.tempo_segundos);
+            console.log('[INATIVIDADE] Tempo: ' + tempoInatividade + 's');
+            resetarTimer();
+            document.addEventListener('mousedown', resetarTimer);
+            document.addEventListener('keydown', resetarTimer);
+            document.addEventListener('click', resetarTimer);
+            document.addEventListener('touchstart', resetarTimer);
+        })
+        .catch(function(e) {
+            console.error('[INATIVIDADE] Erro:', e);
+        });
+
 </script>
 </body>
 </html>
