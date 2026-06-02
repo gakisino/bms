@@ -2335,5 +2335,89 @@ def enviar_mensagem_contato():
         return redirect('/contatos?erro=enviar_mensagem')
 
 
+# 📊 RANKING
+@app.route('/ranking')
+@login_required
+def ranking():
+    """Lista todos os registros de ranking"""
+    try:
+        with get_cursor() as (_, cursor):
+            cursor.execute("""
+                SELECT r.*, u.nome as unidade_nome, u.sigla
+                FROM ranking r
+                LEFT JOIN unidades u ON r.id_unidades = u.id
+                ORDER BY r.data DESC, r.id_unidades
+            """)
+            ranking_list = cursor.fetchall()
+
+            # Buscar unidades para o dropdown
+            cursor.execute("SELECT id, nome, sigla FROM unidades ORDER BY nome")
+            unidades_list = cursor.fetchall()
+
+        return render_template('ranking.html', ranking=ranking_list, unidades_list=unidades_list)
+    except Exception as e:
+        print(f"[ERRO] Listar ranking: {e}")
+        return render_template('ranking.html', ranking=[], erro="Erro ao carregar ranking")
+
+
+@app.route('/ranking/salvar', methods=['POST'])
+@login_required
+def salvar_ranking():
+    """Salvar/editar registro de ranking"""
+    try:
+        id_ranking = request.form.get('id', '').strip()
+        id_unidades = request.form.get('id_unidades', '').strip()
+        data = request.form.get('data', '').strip()
+        visitas = request.form.get('visitas', '').strip()
+        matriculas = request.form.get('matriculas', '').strip()
+
+        # Validar campos obrigatórios
+        if not id_unidades or not data:
+            return redirect('/ranking?erro=campos_obrigatorios')
+
+        # Converter valores para números
+        try:
+            visitas = int(visitas) if visitas else None
+            matriculas = int(matriculas) if matriculas else None
+            id_unidades = int(id_unidades) if id_unidades else None
+        except ValueError:
+            return redirect('/ranking?erro=valores_invalidos')
+
+        with get_cursor() as (_, cursor):
+            if id_ranking:
+                # Editar
+                cursor.execute("""
+                    UPDATE ranking SET
+                        id_unidades=%s, data=%s, visitas=%s, matriculas=%s
+                    WHERE id=%s
+                """, (id_unidades, data, visitas, matriculas, id_ranking))
+            else:
+                # Criar
+                cursor.execute("""
+                    INSERT INTO ranking
+                    (id_unidades, data, visitas, matriculas)
+                    VALUES (%s, %s, %s, %s)
+                """, (id_unidades, data, visitas, matriculas))
+
+        return redirect('/ranking?ok=salvo')
+
+    except Exception as e:
+        print(f"[ERRO] Salvar ranking: {e}")
+        return redirect('/ranking?erro=salvar')
+
+
+@app.route('/ranking/deletar/<int:id>', methods=['POST'])
+@login_required
+def deletar_ranking(id):
+    """Deletar registro de ranking"""
+    try:
+        with get_cursor() as (_, cursor):
+            cursor.execute("DELETE FROM ranking WHERE id=%s", (id,))
+        return redirect('/ranking?ok=deletado')
+    except Exception as e:
+        print(f"[ERRO] Deletar ranking: {e}")
+        return redirect('/ranking?erro=deletar')
+
+
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

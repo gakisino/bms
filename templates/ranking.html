@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px;">
+    <h2 style="color: #1e293b; font-weight: 700;">📊 Ranking</h2>
+    <button onclick="abrirModalRanking()" style="padding:10px 16px; background:#6366f1; color:white; border:none; border-radius:10px; cursor:pointer; font-weight:600;">+ Novo Registro</button>
+</div>
+
+<!-- MENSAGENS -->
+{% if erro %}
+<div style="background:#fee2e2; color:#dc2626; padding:12px 16px; border-radius:10px; margin-bottom:20px; border-left:4px solid #dc2626;">
+    ✕ Erro:
+    {% if erro == 'campos_obrigatorios' %}
+        Preencha os campos obrigatórios (Unidade, Data)
+    {% elif erro == 'valores_invalidos' %}
+        Valores de visitas e matrículas devem ser números
+    {% else %}
+        {{ erro }}
+    {% endif %}
+</div>
+{% endif %}
+{% if ok %}
+<div style="background:#dcfce7; color:#16a34a; padding:12px 16px; border-radius:10px; margin-bottom:20px; border-left:4px solid #16a34a;">
+    ✓ Registro {{ ok }} com sucesso!
+</div>
+{% endif %}
+
+<!-- TABELA -->
+<div style="background: white; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); overflow: hidden; border: 1px solid #f1f5f9;">
+    <table style="width: 100%; border-collapse: collapse;">
+        <thead style="background: #f8fafc; border-bottom: 2px solid #f1f5f9;">
+            <tr>
+                <th style="padding: 15px; text-align: left; color: #64748b; font-size: 11px; text-transform: uppercase;">Unidade</th>
+                <th style="padding: 15px; text-align: center; color: #64748b; font-size: 11px; text-transform: uppercase;">Data</th>
+                <th style="padding: 15px; text-align: center; color: #64748b; font-size: 11px; text-transform: uppercase;">Visitas</th>
+                <th style="padding: 15px; text-align: center; color: #64748b; font-size: 11px; text-transform: uppercase;">Matrículas</th>
+                <th style="padding: 15px; text-align: center; color: #64748b; font-size: 11px; text-transform: uppercase;">Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% if ranking %}
+                {% for r in ranking %}
+                <tr style="border-bottom: 1px solid #f1f5f9; transition: 0.2s;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='white'">
+                    <td style="padding: 15px; font-weight: 600; color: #1e293b;">
+                        {% if r.unidade_nome %}
+                            <span style="background: #dbeafe; color: #1e40af; padding: 4px 8px; border-radius: 6px; font-size: 12px;">
+                                {{ r.sigla }} - {{ r.unidade_nome }}
+                            </span>
+                        {% else %}
+                            <span style="background: #f3f4f6; color: #6b7280; padding: 4px 8px; border-radius: 6px; font-size: 12px;">
+                                Sem unidade
+                            </span>
+                        {% endif %}
+                    </td>
+                    <td style="padding: 15px; text-align: center; color: #1e293b; font-weight: 600;">
+                        {% if r.data %}
+                            {{ r.data.strftime('%d/%m/%Y') }}
+                        {% else %}
+                            —
+                        {% endif %}
+                    </td>
+                    <td style="padding: 15px; text-align: center; color: #1e293b; font-weight: 600;">{{ r.visitas or '—' }}</td>
+                    <td style="padding: 15px; text-align: center; color: #1e293b; font-weight: 600;">{{ r.matriculas or '—' }}</td>
+                    <td style="padding: 15px; text-align: center;">
+                        <div style="display:flex; justify-content:center; gap:12px;">
+                            <button type="button"
+                                onclick="preencherEdicaoRanking({{ r.id }}, {{ r.id_unidades or 'null' }}, '{{ r.data }}', {{ r.visitas or 'null' }}, {{ r.matriculas or 'null' }})"
+                                title="Editar" style="color: #6366f1; background: none; border: none; cursor: pointer;">
+                                <i data-lucide="edit-3" style="width: 18px;"></i>
+                            </button>
+                            <button type="button"
+                                onclick="if(confirm('Excluir registro de {{ r.data }}?')) { document.getElementById('formDeleteRanking').action = '/ranking/deletar/{{ r.id }}'; document.getElementById('formDeleteRanking').submit(); }"
+                                title="Excluir" style="color: #ef4444; background: none; border: none; cursor: pointer;">
+                                <i data-lucide="trash-2" style="width: 18px;"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            {% else %}
+            <tr>
+                <td colspan="5" style="padding: 40px; text-align: center; color: #94a3b8;">
+                    Nenhum registro cadastrado
+                </td>
+            </tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+
+<!-- MODAL RANKING -->
+<div id="modalRanking" style="display: none; position: fixed; inset: 0; background: rgba(15,23,42,0.7); z-index: 9999; align-items: center; justify-content: center; backdrop-filter: blur(4px);">
+    <div style="background: white; width: 95%; max-width: 500px; border-radius: 20px; padding: 30px; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);">
+        <h2 id="modalRankingTitle" style="color:#1e293b; font-weight:700; margin-bottom: 20px;">Novo Registro</h2>
+
+        <form id="formRanking" method="POST" action="/ranking/salvar">
+            <input type="hidden" name="id" id="f_id_ranking">
+
+            <div style="display: grid; grid-template-columns: 1fr; gap: 15px;">
+
+                <div>
+                    <label class="label-form">Unidade *</label>
+                    <select name="id_unidades" id="f_id_unidades" required class="input-form">
+                        <option value="">Selecione uma unidade</option>
+                        {% for u in unidades_list if unidades_list is defined %}
+                            <option value="{{ u.id }}">{{ u.sigla }} - {{ u.nome }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label class="label-form">Data *</label>
+                    <input type="date" name="data" id="f_data" required class="input-form">
+                </div>
+
+                <div>
+                    <label class="label-form">Visitas</label>
+                    <input type="number" name="visitas" id="f_visitas" class="input-form" placeholder="0" min="0">
+                </div>
+
+                <div>
+                    <label class="label-form">Matrículas</label>
+                    <input type="number" name="matriculas" id="f_matriculas" class="input-form" placeholder="0" min="0">
+                </div>
+
+            </div>
+
+            <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 25px;">
+                <button type="button" onclick="fecharModalRanking()" style="padding:10px 20px; background:#f1f5f9; color:#64748b; border:1px solid #e2e8f0; border-radius:10px; cursor:pointer; font-weight:600;">Cancelar</button>
+                <button type="submit" style="padding:10px 20px; background:#6366f1; color:white; border:none; border-radius:10px; cursor:pointer; font-weight:600;">Salvar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- FORM HIDDEN PARA DELETE -->
+<form id="formDeleteRanking" method="POST" style="display:none;"></form>
+
+<script>
+function abrirModalRanking() {
+    document.getElementById('f_id_ranking').value = '';
+    document.getElementById('modalRankingTitle').textContent = 'Novo Registro';
+    document.getElementById('formRanking').reset();
+    document.getElementById('modalRanking').style.display = 'flex';
+}
+
+function fecharModalRanking() {
+    document.getElementById('modalRanking').style.display = 'none';
+}
+
+function preencherEdicaoRanking(id, id_unidades, data, visitas, matriculas) {
+    document.getElementById('f_id_ranking').value = id;
+    document.getElementById('f_id_unidades').value = id_unidades || '';
+    document.getElementById('f_data').value = data;
+    document.getElementById('f_visitas').value = visitas || '';
+    document.getElementById('f_matriculas').value = matriculas || '';
+
+    document.getElementById('modalRankingTitle').textContent = 'Editar Registro';
+    document.getElementById('modalRanking').style.display = 'flex';
+}
+
+// Fechar modal ao clicar fora
+document.getElementById('modalRanking').addEventListener('click', function(e) {
+    if (e.target === this) fecharModalRanking();
+});
+</script>
+
+{% endblock %}
