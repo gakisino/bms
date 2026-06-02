@@ -332,13 +332,31 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
     }
 
-    // Criar labels com a quantidade de matrículas
-    const labelsComQuantidade = vendedores.map((v, i) => `${v} (${quantidades[i]})`);
+    // Plugin customizado para desenhar números dentro das fatias
+    const pluginDataLabels = {
+        id: 'dataLabels',
+        afterDatasetsDraw(chart) {
+            const { ctx, data, chartArea: { left, top, width, height } } = chart;
+            ctx.font = 'bold 16px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillStyle = 'white';
+
+            data.datasets.forEach((dataset, i) => {
+                const meta = chart.getDatasetMeta(i);
+                meta.data.forEach((datapoint, index) => {
+                    const { x, y } = datapoint.tooltipPosition();
+                    const value = dataset.data[index];
+                    ctx.fillText(value, x, y);
+                });
+            });
+        }
+    };
 
     new Chart(ctx, {
         type: 'doughnut',
         data: {
-            labels: labelsComQuantidade,
+            labels: vendedores,
             datasets: [{
                 data: quantidades,
                 backgroundColor: cores.slice(0, vendedores.length),
@@ -361,12 +379,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 tooltip: {
                     callbacks: {
                         label: function(context) {
-                            return context.label + ': ' + context.parsed + ' matriculas';
+                            return context.label + ': ' + context.parsed + ' matrículas';
                         }
                     }
                 }
             }
-        }
+        },
+        plugins: [pluginDataLabels]
     });
 });
 </script>
