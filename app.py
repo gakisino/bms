@@ -2063,7 +2063,15 @@ def dashboard_vendedores():
                     'conversao_pct': 0
                 }
 
-        return render_template('dashboard_vendedores.html',
+        # Detectar se é mobile pela URL ou User-Agent
+        is_mobile = request.args.get('mobile', '').lower() == 'true' or \
+                   'mobile' in request.user_agent.string.lower() or \
+                   'android' in request.user_agent.string.lower() or \
+                   'iphone' in request.user_agent.string.lower()
+
+        template = 'dashboard_vendedores_mobile.html' if is_mobile else 'dashboard_vendedores.html'
+
+        return render_template(template,
                              ranking_unidades=ranking_unidades,
                              ranking_vendedores=ranking_vendedores,
                              totais=totais,
