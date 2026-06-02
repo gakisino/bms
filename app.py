@@ -2336,6 +2336,24 @@ def enviar_mensagem_contato():
 
 
 # 📊 RANKING
+@app.route('/api/vendedores-unidade/<int:id_unidade>')
+@login_required
+def api_vendedores_unidade(id_unidade):
+    """Retorna vendedores de uma unidade em JSON"""
+    try:
+        with get_cursor() as (_, cursor):
+            cursor.execute("""
+                SELECT id, nome FROM vendedores
+                WHERE id_unidades = %s
+                ORDER BY nome
+            """, (id_unidade,))
+            vendedores = cursor.fetchall()
+        return jsonify(vendedores)
+    except Exception as e:
+        print(f"[ERRO] Buscar vendedores: {e}")
+        return jsonify([]), 500
+
+
 @app.route('/ranking')
 @login_required
 def ranking():
@@ -2343,9 +2361,10 @@ def ranking():
     try:
         with get_cursor() as (_, cursor):
             cursor.execute("""
-                SELECT r.*, u.nome as unidade_nome, u.sigla
+                SELECT r.*, u.nome as unidade_nome, u.sigla, v.nome as vendedor_nome
                 FROM ranking r
                 LEFT JOIN unidades u ON r.id_unidades = u.id
+                LEFT JOIN vendedores v ON r.id_vendedores = v.id
                 ORDER BY r.data DESC, r.id_unidades
             """)
             ranking_list = cursor.fetchall()
@@ -2363,41 +2382,44 @@ def ranking():
 @app.route('/ranking/salvar', methods=['POST'])
 @login_required
 def salvar_ranking():
-    """Salvar/editar registro de ranking"""
+    """Salvar/editar registros de ranking (um por vendedor)"""
     try:
-        id_ranking = request.form.get('id', '').strip()
         id_unidades = request.form.get('id_unidades', '').strip()
         data = request.form.get('data', '').strip()
-        visitas = request.form.get('visitas', '').strip()
-        matriculas = request.form.get('matriculas', '').strip()
 
         # Validar campos obrigatórios
         if not id_unidades or not data:
             return redirect('/ranking?erro=campos_obrigatorios')
 
-        # Converter valores para números
         try:
-            visitas = int(visitas) if visitas else None
-            matriculas = int(matriculas) if matriculas else None
-            id_unidades = int(id_unidades) if id_unidades else None
+            id_unidades = int(id_unidades)
         except ValueError:
             return redirect('/ranking?erro=valores_invalidos')
 
+        # Buscar arrays de vendedores, visitas e matrículas
+        id_vendedores = request.form.getlist('id_vendedores[]')
+        visitas_list = request.form.getlist('visitas[]')
+        matriculas_list = request.form.getlist('matriculas[]')
+
+        if not id_vendedores:
+            return redirect('/ranking?erro=nenhum_vendedor')
+
         with get_cursor() as (_, cursor):
-            if id_ranking:
-                # Editar
-                cursor.execute("""
-                    UPDATE ranking SET
-                        id_unidades=%s, data=%s, visitas=%s, matriculas=%s
-                    WHERE id=%s
-                """, (id_unidades, data, visitas, matriculas, id_ranking))
-            else:
-                # Criar
-                cursor.execute("""
-                    INSERT INTO ranking
-                    (id_unidades, data, visitas, matriculas)
-                    VALUES (%s, %s, %s, %s)
-                """, (id_unidades, data, visitas, matriculas))
+            # Inserir um registro para cada vendedor
+            for i, id_vendedor in enumerate(id_vendedores):
+                try:
+                    id_vendedor = int(id_vendedor)
+                    visitas = int(visitas_list[i]) if i < len(visitas_list) and visitas_list[i] else None
+                    matriculas = int(matriculas_list[i]) if i < len(matriculas_list) and matriculas_list[i] else None
+
+                    cursor.execute("""
+                        INSERT INTO ranking
+                        (id_unidades, id_vendedores, data, visitas, matriculas)
+                        VALUES (%s, %s, %s, %s, %s)
+                    """, (id_unidades, id_vendedor, data, visitas, matriculas))
+                except (ValueError, IndexError) as e:
+                    print(f"[AVISO] Erro ao processar vendedor {id_vendedor}: {e}")
+                    continue
 
         return redirect('/ranking?ok=salvo')
 
