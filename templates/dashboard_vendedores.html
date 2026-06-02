@@ -29,124 +29,125 @@
 
 <!-- CARDS RESUMO -->
 <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; margin-bottom: 30px;">
-    <!-- Card 1: Total de Matrículas -->
+    <!-- Card 1: Total de Visitas -->
     <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 15px; padding: 25px; color: white; box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);">
+        <div style="font-size: 13px; opacity: 0.9; margin-bottom: 10px; text-transform: uppercase; font-weight: 600;">Total de Visitas</div>
+        <div style="font-size: 36px; font-weight: 700;">{{ totais.total_visitas or 0 }}</div>
+        <div style="font-size: 12px; opacity: 0.8; margin-top: 10px;">No período</div>
+    </div>
+
+    <!-- Card 2: Total de Matrículas -->
+    <div style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); border-radius: 15px; padding: 25px; color: white; box-shadow: 0 4px 15px rgba(245, 87, 108, 0.3);">
         <div style="font-size: 13px; opacity: 0.9; margin-bottom: 10px; text-transform: uppercase; font-weight: 600;">Total de Matrículas</div>
         <div style="font-size: 36px; font-weight: 700;">{{ totais.total_matriculas or 0 }}</div>
-        <div style="font-size: 12px; opacity: 0.8; margin-top: 10px;">Registradas no período</div>
+        <div style="font-size: 12px; opacity: 0.8; margin-top: 10px;">Conversão: {{ totais.conversao_pct or 0 }}%</div>
     </div>
 
-    <!-- Card 2: Valor Total -->
-    <div style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); border-radius: 15px; padding: 25px; color: white; box-shadow: 0 4px 15px rgba(245, 87, 108, 0.3);">
-        <div style="font-size: 13px; opacity: 0.9; margin-bottom: 10px; text-transform: uppercase; font-weight: 600;">Valor Total</div>
-        <div style="font-size: 36px; font-weight: 700;">{{ totais.total_valor|moeda }}</div>
-        <div style="font-size: 12px; opacity: 0.8; margin-top: 10px;">Em matrículas</div>
-    </div>
-
-    <!-- Card 3: Vendedores Ativos -->
+    <!-- Card 3: Média Diária -->
     <div style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); border-radius: 15px; padding: 25px; color: white; box-shadow: 0 4px 15px rgba(79, 172, 254, 0.3);">
-        <div style="font-size: 13px; opacity: 0.9; margin-bottom: 10px; text-transform: uppercase; font-weight: 600;">Vendedores Ativos</div>
-        <div style="font-size: 36px; font-weight: 700;">{{ totais.total_vendedores or 0 }}</div>
-        <div style="font-size: 12px; opacity: 0.8; margin-top: 10px;">Com vendas no período</div>
+        <div style="font-size: 13px; opacity: 0.9; margin-bottom: 10px; text-transform: uppercase; font-weight: 600;">Dias Cadastrados</div>
+        <div style="font-size: 36px; font-weight: 700;">{{ totais.dias_cadastrados or 0 }}</div>
+        <div style="font-size: 12px; opacity: 0.8; margin-top: 10px;">Dias do mês</div>
     </div>
 </div>
 
-<!-- TABELA RANKING -->
-<div style="background: white; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); overflow: hidden; border: 1px solid #f1f5f9;">
-    <table style="width: 100%; border-collapse: collapse;">
-        <thead style="background: #f8fafc; border-bottom: 2px solid #f1f5f9;">
-            <tr>
-                <th style="padding: 15px; text-align: center; color: #64748b; font-size: 11px; text-transform: uppercase; width: 60px;">#</th>
-                <th style="padding: 15px; text-align: left; color: #64748b; font-size: 11px; text-transform: uppercase;">Vendedor</th>
-                <th style="padding: 15px; text-align: center; color: #64748b; font-size: 11px; text-transform: uppercase;">Matrículas</th>
-                <th style="padding: 15px; text-align: right; color: #64748b; font-size: 11px; text-transform: uppercase;">Valor Matrículas</th>
-                <th style="padding: 15px; text-align: right; color: #64748b; font-size: 11px; text-transform: uppercase;">Valor Total Parcelas</th>
-                <th style="padding: 15px; text-align: right; color: #64748b; font-size: 11px; text-transform: uppercase;">Média</th>
-                <th style="padding: 15px; text-align: center; color: #64748b; font-size: 11px; text-transform: uppercase;">Unidades</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% if ranking %}
-                {% for r in ranking %}
-                    {% set position = loop.index if r.total_matriculas > 0 else none %}
-                    <tr style="border-bottom: 1px solid #f1f5f9; transition: 0.2s;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='white'">
-                        <td style="padding: 15px; text-align: center;">
-                            {% if position == 1 %}
-                                <span style="background: #fbbf24; color: #78350f; padding: 6px 12px; border-radius: 6px; font-weight: 700; font-size: 14px;">🥇</span>
-                            {% elif position == 2 %}
-                                <span style="background: #d1d5db; color: #374151; padding: 6px 12px; border-radius: 6px; font-weight: 700; font-size: 14px;">🥈</span>
-                            {% elif position == 3 %}
-                                <span style="background: #fca5a5; color: #7f1d1d; padding: 6px 12px; border-radius: 6px; font-weight: 700; font-size: 14px;">🥉</span>
-                            {% elif r.total_matriculas > 0 %}
-                                <span style="color: #64748b; font-weight: 600;">{{ loop.index }}</span>
-                            {% else %}
-                                <span style="color: #cbd5e1; font-weight: 600;">—</span>
-                            {% endif %}
+<!-- RANKING UNIDADES -->
+<div style="margin-bottom: 40px;">
+    <h3 style="color: #1e293b; font-weight: 700; margin-bottom: 15px;">🏢 Ranking de Unidades</h3>
+    <div style="background: white; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); overflow: hidden; border: 1px solid #f1f5f9;">
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead style="background: #f8fafc; border-bottom: 2px solid #f1f5f9;">
+                <tr>
+                    <th style="padding: 15px; text-align: center; color: #64748b; font-size: 11px; text-transform: uppercase; width: 60px;">#</th>
+                    <th style="padding: 15px; text-align: left; color: #64748b; font-size: 11px; text-transform: uppercase;">Unidade</th>
+                    <th style="padding: 15px; text-align: center; color: #64748b; font-size: 11px; text-transform: uppercase;">Visitas</th>
+                    <th style="padding: 15px; text-align: center; color: #64748b; font-size: 11px; text-transform: uppercase;">Matrículas</th>
+                    <th style="padding: 15px; text-align: center; color: #64748b; font-size: 11px; text-transform: uppercase;">Conversão %</th>
+                    <th style="padding: 15px; text-align: center; color: #64748b; font-size: 11px; text-transform: uppercase;">Média Diária (V/M)</th>
+                    <th style="padding: 15px; text-align: center; color: #64748b; font-size: 11px; text-transform: uppercase;">Projeção Mês (V/M)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if ranking_unidades %}
+                    {% for u in ranking_unidades %}
+                        <tr style="border-bottom: 1px solid #f1f5f9; transition: 0.2s;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='white'">
+                            <td style="padding: 15px; text-align: center; color: #1e293b; font-weight: 700;">{{ loop.index }}</td>
+                            <td style="padding: 15px; font-weight: 600; color: #1e293b;">{{ u.sigla }} - {{ u.unidade_nome or 'Sem unidade' }}</td>
+                            <td style="padding: 15px; text-align: center; color: #1e293b; font-weight: 600;">{{ u.total_visitas or 0 }}</td>
+                            <td style="padding: 15px; text-align: center; color: #1e293b; font-weight: 600;">{{ u.total_matriculas or 0 }}</td>
+                            <td style="padding: 15px; text-align: center; color: #1e293b; font-weight: 600;">{{ u.conversao_pct or 0 }}%</td>
+                            <td style="padding: 15px; text-align: center; color: #64748b; font-size: 12px;">
+                                {{ u.media_diaria_visitas or 0 }} / {{ u.media_diaria_matriculas or 0 }}
+                            </td>
+                            <td style="padding: 15px; text-align: center; color: #64748b; font-size: 12px; font-weight: 600;">
+                                {{ u.projecao_visitas or 0 }} / {{ u.projecao_matriculas or 0 }}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="7" style="padding: 40px; text-align: center; color: #94a3b8;">
+                            Nenhum dado registrado para este período
                         </td>
-                        <td style="padding: 15px; font-weight: 600; color: #1e293b;">{{ r.vendedor_nome }}</td>
-                        <td style="padding: 15px; text-align: center; color: #1e293b; font-weight: 600;">{{ r.total_matriculas }}</td>
-                        <td style="padding: 15px; text-align: right; color: #1e293b; font-weight: 500;">
-                            {{ r.total_valor_matricula|moeda }}
-                        </td>
-                        <td style="padding: 15px; text-align: right; color: #1e293b; font-weight: 500;">
-                            {{ r.total_valor_parcelas|moeda }}
-                        </td>
-                        <td style="padding: 15px; text-align: right; color: #64748b;">
-                            {{ r.media_matricula|moeda }}
-                        </td>
-                        <td style="padding: 15px; text-align: center; color: #64748b;">{{ r.unidades_atuacao or 0 }}</td>
                     </tr>
-                {% endfor %}
-            {% else %}
-            <tr>
-                <td colspan="7" style="padding: 40px; text-align: center; color: #94a3b8;">
-                    Nenhuma venda registrada no período
-                </td>
-            </tr>
-            {% endif %}
-        </tbody>
-    </table>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
 </div>
 
-<!-- LEGENDA -->
-<div style="margin-top: 20px; padding: 15px; background: #f0f9ff; border-left: 4px solid #0284c7; border-radius: 8px;">
-    <p style="color: #0c4a6e; font-size: 13px; margin: 0;">
-        <strong>Legenda:</strong>
-        Matrículas = quantidade de registros |
-        Valor Matrículas = soma do valor_matricula |
-        Valor Total Parcelas = (valor_parcela × qtd_parcelas) |
-        Média = valor médio por matrícula |
-        Unidades = quantas unidades diferentes cada vendedor atuou
-    </p>
+<!-- RANKING VENDEDORES -->
+<div>
+    <h3 style="color: #1e293b; font-weight: 700; margin-bottom: 15px;">👥 Ranking de Vendedores</h3>
+    <div style="background: white; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); overflow: hidden; border: 1px solid #f1f5f9;">
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead style="background: #f8fafc; border-bottom: 2px solid #f1f5f9;">
+                <tr>
+                    <th style="padding: 15px; text-align: center; color: #64748b; font-size: 11px; text-transform: uppercase; width: 60px;">#</th>
+                    <th style="padding: 15px; text-align: left; color: #64748b; font-size: 11px; text-transform: uppercase;">Vendedor</th>
+                    <th style="padding: 15px; text-align: center; color: #64748b; font-size: 11px; text-transform: uppercase;">Visitas</th>
+                    <th style="padding: 15px; text-align: center; color: #64748b; font-size: 11px; text-transform: uppercase;">Matrículas</th>
+                    <th style="padding: 15px; text-align: center; color: #64748b; font-size: 11px; text-transform: uppercase;">Conversão %</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if ranking_vendedores %}
+                    {% for v in ranking_vendedores %}
+                        <tr style="border-bottom: 1px solid #f1f5f9; transition: 0.2s;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='white'">
+                            <td style="padding: 15px; text-align: center;">
+                                {% if loop.index == 1 %}
+                                    <span style="background: #fbbf24; color: #78350f; padding: 6px 12px; border-radius: 6px; font-weight: 700; font-size: 14px;">🥇</span>
+                                {% elif loop.index == 2 %}
+                                    <span style="background: #d1d5db; color: #374151; padding: 6px 12px; border-radius: 6px; font-weight: 700; font-size: 14px;">🥈</span>
+                                {% elif loop.index == 3 %}
+                                    <span style="background: #fca5a5; color: #7f1d1d; padding: 6px 12px; border-radius: 6px; font-weight: 700; font-size: 14px;">🥉</span>
+                                {% else %}
+                                    <span style="color: #64748b; font-weight: 600;">{{ loop.index }}</span>
+                                {% endif %}
+                            </td>
+                            <td style="padding: 15px; font-weight: 600; color: #1e293b;">{{ v.vendedor_nome or 'Sem vendedor' }}</td>
+                            <td style="padding: 15px; text-align: center; color: #1e293b; font-weight: 600;">{{ v.total_visitas or 0 }}</td>
+                            <td style="padding: 15px; text-align: center; color: #1e293b; font-weight: 600;">{{ v.total_matriculas or 0 }}</td>
+                            <td style="padding: 15px; text-align: center; color: #1e293b; font-weight: 600;">{{ v.conversao_pct or 0 }}%</td>
+                        </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="5" style="padding: 40px; text-align: center; color: #94a3b8;">
+                            Nenhum dado registrado para este período
+                        </td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
 </div>
 
 <script>
-// Restaurar valores do filtro ao carregar
-window.addEventListener('load', function() {
-    const params = new URLSearchParams(window.location.search);
-    const mes = params.get('mes');
-    const ano = params.get('ano');
-
-    if (mes) {
-        document.getElementById('selectMesDash').value = mes;
-    }
-    if (ano) {
-        document.getElementById('inputAnoDash').value = ano;
-    }
-});
-
-// Aplicar filtro mantendo valores
 function aplicarFiltrodash() {
     const mes = document.getElementById('selectMesDash').value;
     const ano = document.getElementById('inputAnoDash').value;
-
-    if (!mes || !ano) {
-        alert('Por favor, selecione mês e ano');
-        return;
-    }
-
-    const url = '/dashboard-vendedores?mes=' + encodeURIComponent(mes) + '&ano=' + encodeURIComponent(ano);
-    window.location.href = url;
+    window.location.href = `/dashboard-vendedores?mes=${mes}&ano=${ano}`;
 }
 </script>
 

@@ -1963,9 +1963,10 @@ def webhook_whatsapp():
 @app.route('/dashboard-vendedores')
 @login_required
 def dashboard_vendedores():
-    """Dashboard com ranking de vendedores por matrículas do mês atual"""
+    """Dashboard com ranking de unidades e vendedores a partir da tabela ranking"""
     try:
-        from datetime import datetime
+        from datetime import datetime, date
+        from calendar import monthrange
 
         # Pegar mês e ano do parâmetro ou usar mês atual
         mes = request.args.get('mes', datetime.now().month)
@@ -1978,53 +1979,96 @@ def dashboard_vendedores():
             mes = datetime.now().month
             ano = datetime.now().year
 
+        # Calcular dias do mês e dias restantes
+        ultima_dia_mes = monthrange(ano, mes)[1]
+        dia_atual = date.today().day if date.today().month == mes and date.today().year == ano else ultima_dia_mes
+        dias_restantes = ultima_dia_mes - dia_atual
+
         with get_cursor() as (_, cursor):
-            # Buscar ranking de vendedores no mês especificado
+            # RANKING DE UNIDADES
+            cursor.execute("""
+                SELECT
+                    u.id,
+                    u.sigla,
+                    u.nome as unidade_nome,
+                    SUM(r.visitas) as total_visitas,
+                    SUM(r.matriculas) as total_matriculas,
+                    COUNT(DISTINCT r.data) as dias_cadastrados,
+                    ROUND(SUM(r.matriculas) / SUM(r.visitas) * 100, 2) as conversao_pct,
+                    ROUND(SUM(r.visitas) / COUNT(DISTINCT r.data), 1) as media_diaria_visitas,
+                    ROUND(SUM(r.matriculas) / COUNT(DISTINCT r.data), 1) as media_diaria_matriculas
+                FROM ranking r
+                LEFT JOIN unidades u ON r.id_unidades = u.id
+                WHERE MONTH(r.data) = %s AND YEAR(r.data) = %s
+                GROUP BY u.id, u.sigla, u.nome
+                ORDER BY total_matriculas DESC, total_visitas DESC
+            """, (mes, ano))
+
+            ranking_unidades = cursor.fetchall()
+
+            # Adicionar projeção para cada unidade
+            for unidade in ranking_unidades:
+                projecao_visitas = int((unidade['media_diaria_visitas'] * dias_restantes) + unidade['total_visitas'])
+                projecao_matriculas = int((unidade['media_diaria_matriculas'] * dias_restantes) + unidade['total_matriculas'])
+                unidade['projecao_visitas'] = projecao_visitas
+                unidade['projecao_matriculas'] = projecao_matriculas
+
+            # RANKING DE VENDEDORES
             cursor.execute("""
                 SELECT
                     v.id,
                     v.nome as vendedor_nome,
-                    COUNT(m.id) as total_matriculas,
-                    SUM(m.valor_matricula) as total_valor_matricula,
-                    SUM(m.valor_parcela * m.qtd_parcelas) as total_valor_parcelas,
-                    AVG(m.valor_matricula) as media_matricula,
-                    COUNT(DISTINCT m.id_unidades) as unidades_atuacao
-                FROM vendedores v
-                LEFT JOIN matriculas m ON v.id = m.id_vendedores
-                    AND m.data IS NOT NULL
-                    AND MONTH(m.data) = %s
-                    AND YEAR(m.data) = %s
+                    SUM(r.visitas) as total_visitas,
+                    SUM(r.matriculas) as total_matriculas,
+                    ROUND(SUM(r.matriculas) / SUM(r.visitas) * 100, 2) as conversao_pct
+                FROM ranking r
+                LEFT JOIN vendedores v ON r.id_vendedores = v.id
+                WHERE MONTH(r.data) = %s AND YEAR(r.data) = %s
                 GROUP BY v.id, v.nome
-                ORDER BY total_matriculas DESC, total_valor_matricula DESC
+                ORDER BY total_matriculas DESC, total_visitas DESC
             """, (mes, ano))
 
-            ranking = cursor.fetchall()
+            ranking_vendedores = cursor.fetchall()
 
-            # Calcular totais
+            # Calcular totais gerais
             cursor.execute("""
                 SELECT
-                    COUNT(id) as total_matriculas,
-                    SUM(valor_matricula) as total_valor,
-                    COUNT(DISTINCT id_vendedores) as total_vendedores
-                FROM matriculas
-                WHERE data IS NOT NULL
-                    AND MONTH(data) = %s
-                    AND YEAR(data) = %s
+                    SUM(visitas) as total_visitas,
+                    SUM(matriculas) as total_matriculas,
+                    COUNT(DISTINCT id_unidades) as total_unidades,
+                    COUNT(DISTINCT id_vendedores) as total_vendedores,
+                    COUNT(DISTINCT data) as dias_cadastrados
+                FROM ranking
+                WHERE MONTH(data) = %s AND YEAR(data) = %s
             """, (mes, ano))
 
             totais = cursor.fetchone()
+            if totais and totais['total_visitas']:
+                totais['conversao_pct'] = round(totais['total_matriculas'] / totais['total_visitas'] * 100, 2)
+            else:
+                totais = {
+                    'total_visitas': 0,
+                    'total_matriculas': 0,
+                    'total_unidades': 0,
+                    'total_vendedores': 0,
+                    'dias_cadastrados': 0,
+                    'conversao_pct': 0
+                }
 
         return render_template('dashboard_vendedores.html',
-                             ranking=ranking,
+                             ranking_unidades=ranking_unidades,
+                             ranking_vendedores=ranking_vendedores,
                              totais=totais,
                              mes=mes,
                              ano=ano,
+                             dias_restantes=dias_restantes,
                              mes_nome=datetime(ano, mes, 1).strftime('%B de %Y'))
     except Exception as e:
         print(f"[ERRO] Dashboard vendedores: {e}")
         return render_template('dashboard_vendedores.html',
-                             ranking=[],
-                             totais={'total_matriculas': 0, 'total_valor': 0, 'total_vendedores': 0},
+                             ranking_unidades=[],
+                             ranking_vendedores=[],
+                             totais={},
                              erro="Erro ao carregar dashboard")
 
 
