@@ -11,7 +11,13 @@
       "Bash(python3)",
       "Bash(curl -s http://localhost:5000/agenda_visual)",
       "Read(//c/Log/Bms/**)",
-      "Bash(python criar_estancia.py)"
+      "Bash(python criar_estancia.py)",
+      "Bash(python -c ' *)",
+      "Bash(sshpass -p 'T@mp1nhaBms' ssh -o StrictHostKeyChecking=no root@129.121.33.25 'docker network connect coolify api-rq4feq1tj1tc7wnwvwyodpx5 2>&1; echo \"EXIT:$?\"')",
+      "Bash(python3 -c ' *)",
+      "Bash(python -c \"import openpyxl; print\\('ok'\\)\")",
+      "Bash(python gerar_acordos.py)",
+      "Bash(pip install *)"
     ]
   }
 }

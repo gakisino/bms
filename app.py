@@ -26,6 +26,8 @@ def get_db():
 
 @contextmanager
 def get_cursor(dictionary=True):
+
+    
     conn = get_db()
     cursor = conn.cursor(dictionary=dictionary)
     try:
@@ -1777,6 +1779,547 @@ def api_horarios():
     except Exception as e:
         print(f"[ERRO] API horários: {e}")
         return jsonify({'erro': str(e)}), 500
+
+
+# 💬 MENSAGENS WHATSAPP
+@app.route('/mensagens')
+@login_required
+def mensagens():
+    """Lista mensagens recebidas do WhatsApp"""
+    try:
+        filtro_lida = request.args.get('lida', '')
+        filtro_unidade = request.args.get('unidade', '')
+        sort = request.args.get('sort', 'data_recebida')
+        order = request.args.get('order', 'desc')
+
+        if sort not in ('data_recebida', 'nome_remetente', 'numero_remetente'):
+            sort = 'data_recebida'
+        if order not in ('asc', 'desc'):
+            order = 'desc'
+
+        with get_cursor() as (_, cursor):
+            query = """
+                SELECT m.*, u.nome as unidade_nome, u.sigla, o.nome as operador_nome
+                FROM mensagens_whatsapp m
+                LEFT JOIN unidades u ON m.id_unidade = u.id
+                LEFT JOIN operadores o ON m.id_operador = o.id
+                WHERE 1=1
+            """
+            params = []
+
+            if filtro_lida:
+                query += " AND m.lida = %s"
+                params.append(1 if filtro_lida == 'lida' else 0)
+
+            if filtro_unidade:
+                query += " AND m.id_unidade = %s"
+                params.append(filtro_unidade)
+
+            query += f" ORDER BY m.{sort} {order}"
+
+            cursor.execute(query, params)
+            mensagens_list = cursor.fetchall()
+
+            # Contagens para resumo
+            cursor.execute("""
+                SELECT
+                    COUNT(*) as total,
+                    SUM(CASE WHEN lida = 0 THEN 1 ELSE 0 END) as nao_lidas,
+                    SUM(CASE WHEN lida = 1 THEN 1 ELSE 0 END) as lidas
+                FROM mensagens_whatsapp
+            """)
+            resumo = cursor.fetchone()
+
+            cursor.execute("SELECT id, nome FROM unidades ORDER BY nome")
+            unidades_list = cursor.fetchall()
+
+        return render_template('mensagens.html',
+                             mensagens=mensagens_list,
+                             unidades=unidades_list,
+                             filtro_lida=filtro_lida,
+                             filtro_unidade=filtro_unidade,
+                             sort=sort,
+                             order=order,
+                             resumo=resumo)
+    except Exception as e:
+        print(f"[ERRO] Listar mensagens: {e}")
+        return render_template('mensagens.html', mensagens=[], unidades=[], erro="Erro ao carregar mensagens")
+
+
+@app.route('/mensagens/<int:id>', methods=['GET'])
+@login_required
+def visualizar_mensagem(id):
+    """Visualiza detalhes de uma mensagem e marca como lida"""
+    try:
+        with get_cursor() as (_, cursor):
+            cursor.execute("""
+                SELECT m.*, u.nome as unidade_nome, o.nome as operador_nome, us.nome as usuario_resposta_nome
+                FROM mensagens_whatsapp m
+                LEFT JOIN unidades u ON m.id_unidade = u.id
+                LEFT JOIN operadores o ON m.id_operador = o.id
+                LEFT JOIN usuarios us ON m.id_usuario_resposta = us.id
+                WHERE m.id = %s
+            """, (id,))
+            mensagem = cursor.fetchone()
+
+            if not mensagem:
+                return redirect('/mensagens?erro=nao_encontrada')
+
+            # Marcar como lida
+            if mensagem['lida'] == 0:
+                cursor.execute("""
+                    UPDATE mensagens_whatsapp SET lida=1, data_leitura=NOW() WHERE id=%s
+                """, (id,))
+
+        return render_template('mensagem_detalhes.html', mensagem=mensagem)
+    except Exception as e:
+        print(f"[ERRO] Visualizar mensagem: {e}")
+        return redirect('/mensagens?erro=carregar')
+
+
+@app.route('/mensagens/<int:id>/responder', methods=['POST'])
+@login_required
+def responder_mensagem(id):
+    """Salva resposta para uma mensagem do WhatsApp"""
+    try:
+        resposta = request.form.get('resposta', '').strip()
+        id_usuario = session['usuario_id']
+
+        if not resposta:
+            return redirect(f'/mensagens/{id}?erro=resposta_vazia')
+
+        with get_cursor() as (_, cursor):
+            cursor.execute("""
+                UPDATE mensagens_whatsapp
+                SET resposta=%s, data_resposta=NOW(), id_usuario_resposta=%s
+                WHERE id=%s
+            """, (resposta, id_usuario, id))
+
+        return redirect(f'/mensagens/{id}?ok=respondida')
+    except Exception as e:
+        print(f"[ERRO] Responder mensagem: {e}")
+        return redirect(f'/mensagens/{id}?erro=responder')
+
+
+@app.route('/api/webhook/whatsapp', methods=['POST'])
+def webhook_whatsapp():
+    """
+    Webhook para receber mensagens do WhatsApp
+    Integre com sua API de WhatsApp (Twilio, WhatsApp Business API, etc)
+
+    Estrutura esperada do JSON:
+    {
+        "numero_remetente": "5511999999999",
+        "nome_remetente": "João Silva",
+        "mensagem": "Olá, gostaria de agendar uma visita",
+        "tipo_mensagem": "texto",
+        "id_whatsapp_api": "wamid.xxx",
+        "id_operador": 1,  # opcional
+        "id_unidade": 1    # opcional
+    }
+    """
+    try:
+        dados = request.get_json()
+
+        if not dados or 'numero_remetente' not in dados or 'mensagem' not in dados:
+            return jsonify({'erro': 'Dados inválidos'}), 400
+
+        with get_cursor() as (_, cursor):
+            cursor.execute("""
+                INSERT INTO mensagens_whatsapp
+                (numero_remetente, nome_remetente, mensagem, tipo_mensagem, id_whatsapp_api, id_operador, id_unidade)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """, (
+                dados['numero_remetente'],
+                dados.get('nome_remetente'),
+                dados['mensagem'],
+                dados.get('tipo_mensagem', 'texto'),
+                dados.get('id_whatsapp_api'),
+                dados.get('id_operador'),
+                dados.get('id_unidade')
+            ))
+
+        return jsonify({'status': 'ok'}), 200
+
+    except Exception as e:
+        print(f"[ERRO] Webhook WhatsApp: {e}")
+        return jsonify({'erro': str(e)}), 500
+
+
+# 📊 DASHBOARD VENDEDORES
+@app.route('/dashboard-vendedores')
+@login_required
+def dashboard_vendedores():
+    """Dashboard com ranking de vendedores por matrículas do mês atual"""
+    try:
+        from datetime import datetime
+
+        # Pegar mês e ano do parâmetro ou usar mês atual
+        mes = request.args.get('mes', datetime.now().month)
+        ano = request.args.get('ano', datetime.now().year)
+
+        try:
+            mes = int(mes)
+            ano = int(ano)
+        except:
+            mes = datetime.now().month
+            ano = datetime.now().year
+
+        with get_cursor() as (_, cursor):
+            # Buscar ranking de vendedores no mês especificado
+            cursor.execute("""
+                SELECT
+                    v.id,
+                    v.nome as vendedor_nome,
+                    COUNT(m.id) as total_matriculas,
+                    SUM(m.valor_matricula) as total_valor_matricula,
+                    SUM(m.valor_parcela * m.qtd_parcelas) as total_valor_parcelas,
+                    AVG(m.valor_matricula) as media_matricula,
+                    COUNT(DISTINCT m.id_unidades) as unidades_atuacao
+                FROM vendedores v
+                LEFT JOIN matriculas m ON v.id = m.id_vendedores
+                    AND m.data IS NOT NULL
+                    AND MONTH(m.data) = %s
+                    AND YEAR(m.data) = %s
+                GROUP BY v.id, v.nome
+                ORDER BY total_matriculas DESC, total_valor_matricula DESC
+            """, (mes, ano))
+
+            ranking = cursor.fetchall()
+
+            # Calcular totais
+            cursor.execute("""
+                SELECT
+                    COUNT(id) as total_matriculas,
+                    SUM(valor_matricula) as total_valor,
+                    COUNT(DISTINCT id_vendedores) as total_vendedores
+                FROM matriculas
+                WHERE data IS NOT NULL
+                    AND MONTH(data) = %s
+                    AND YEAR(data) = %s
+            """, (mes, ano))
+
+            totais = cursor.fetchone()
+
+        return render_template('dashboard_vendedores.html',
+                             ranking=ranking,
+                             totais=totais,
+                             mes=mes,
+                             ano=ano,
+                             mes_nome=datetime(ano, mes, 1).strftime('%B de %Y'))
+    except Exception as e:
+        print(f"[ERRO] Dashboard vendedores: {e}")
+        return render_template('dashboard_vendedores.html',
+                             ranking=[],
+                             totais={'total_matriculas': 0, 'total_valor': 0, 'total_vendedores': 0},
+                             erro="Erro ao carregar dashboard")
+
+
+# 📋 MATRÍCULAS
+@app.route('/matriculas')
+@login_required
+def matriculas():
+    """Lista matrículas com filtro por mês/ano"""
+    try:
+        from datetime import datetime
+
+        # Pegar mês e ano do parâmetro ou usar mês/ano atual
+        mes = request.args.get('mes', datetime.now().month)
+        ano = request.args.get('ano', datetime.now().year)
+
+        try:
+            mes = int(mes)
+            ano = int(ano)
+        except:
+            mes = datetime.now().month
+            ano = datetime.now().year
+
+        with get_cursor() as (_, cursor):
+            # Buscar matrículas do mês/ano especificado
+            cursor.execute("""
+                SELECT m.*, v.nome as vendedor_nome, u.nome as unidade_nome, u.sigla
+                FROM matriculas m
+                LEFT JOIN vendedores v ON m.id_vendedores = v.id
+                LEFT JOIN unidades u ON m.id_unidades = u.id
+                WHERE m.data IS NOT NULL
+                    AND MONTH(m.data) = %s
+                    AND YEAR(m.data) = %s
+                ORDER BY m.data DESC
+            """, (mes, ano))
+            matriculas_list = cursor.fetchall()
+
+            # Buscar vendedores com suas unidades
+            cursor.execute("""
+                SELECT v.id, v.nome, v.id_unidades, u.nome as unidade_nome
+                FROM vendedores v
+                LEFT JOIN unidades u ON v.id_unidades = u.id
+                ORDER BY v.nome
+            """)
+            vendedores_list = cursor.fetchall()
+
+            cursor.execute("SELECT id, nome, sigla FROM unidades ORDER BY nome")
+            unidades_list = cursor.fetchall()
+
+        # Gerar nome do mês
+        mes_nome = datetime(ano, mes, 1).strftime('%B de %Y')
+
+        return render_template('matriculas.html',
+                             matriculas=matriculas_list,
+                             vendedores_list=vendedores_list,
+                             unidades_list=unidades_list,
+                             mes=mes,
+                             ano=ano,
+                             mes_nome=mes_nome)
+    except Exception as e:
+        print(f"[ERRO] Listar matrículas: {e}")
+        return render_template('matriculas.html', matriculas=[], erro="Erro ao carregar matrículas")
+
+
+@app.route('/matriculas/salvar', methods=['POST'])
+@login_required
+def salvar_matricula():
+    """Salvar/editar matrícula"""
+    try:
+        id_matricula = request.form.get('id', '').strip()
+        data = request.form.get('data', '').strip()
+        valor_matricula = request.form.get('valor_matricula', '').strip()
+        valor_parcela = request.form.get('valor_parcela', '').strip()
+        qtd_parcelas = request.form.get('qtd_parcelas', '').strip()
+        id_vendedores = request.form.get('id_vendedores', '').strip()
+        id_unidades = request.form.get('id_unidades', '').strip()
+        cliente_nome = request.form.get('cliente_nome', '').strip()
+        contrato = request.form.get('contrato', '').strip()
+
+        if not cliente_nome:
+            return redirect('/matriculas?erro=cliente_obrigatorio')
+
+        # Converter valores vazios para None
+        data = data if data else None
+        valor_matricula = float(valor_matricula) if valor_matricula else None
+        valor_parcela = float(valor_parcela) if valor_parcela else None
+        qtd_parcelas = int(qtd_parcelas) if qtd_parcelas else None
+        id_vendedores = id_vendedores if id_vendedores else None
+        id_unidades = id_unidades if id_unidades else None
+
+        with get_cursor() as (_, cursor):
+            if id_matricula:
+                # Editar
+                cursor.execute("""
+                    UPDATE matriculas SET
+                        data=%s, valor_matricula=%s, valor_parcela=%s,
+                        qtd_parcelas=%s, id_vendedores=%s, id_unidades=%s,
+                        cliente_nome=%s, contrato=%s
+                    WHERE id=%s
+                """, (data, valor_matricula, valor_parcela, qtd_parcelas,
+                      id_vendedores, id_unidades, cliente_nome, contrato, id_matricula))
+            else:
+                # Criar
+                cursor.execute("""
+                    INSERT INTO matriculas
+                    (data, valor_matricula, valor_parcela, qtd_parcelas,
+                     id_vendedores, id_unidades, cliente_nome, contrato)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                """, (data, valor_matricula, valor_parcela, qtd_parcelas,
+                      id_vendedores, id_unidades, cliente_nome, contrato))
+
+        return redirect('/matriculas?ok=salvo')
+
+    except Exception as e:
+        print(f"[ERRO] Salvar matrícula: {e}")
+        return redirect('/matriculas?erro=salvar')
+
+
+@app.route('/matriculas/deletar/<int:id>', methods=['POST'])
+@login_required
+def deletar_matricula(id):
+    """Deletar matrícula"""
+    try:
+        with get_cursor() as (_, cursor):
+            cursor.execute("DELETE FROM matriculas WHERE id=%s", (id,))
+        return redirect('/matriculas?ok=deletado')
+    except Exception as e:
+        print(f"[ERRO] Deletar matrícula: {e}")
+        return redirect('/matriculas?erro=deletar')
+
+
+# 💼 VENDEDORES
+@app.route('/vendedores')
+@login_required
+def vendedores():
+    """Lista todos os vendedores"""
+    try:
+        with get_cursor() as (_, cursor):
+            cursor.execute("""
+                SELECT v.*, u.nome as unidade_nome, u.sigla
+                FROM vendedores v
+                LEFT JOIN unidades u ON v.id_unidades = u.id
+                ORDER BY v.nome
+            """)
+            vendedores_list = cursor.fetchall()
+
+            # Buscar unidades para o dropdown
+            cursor.execute("SELECT id, nome, sigla FROM unidades ORDER BY nome")
+            unidades_list = cursor.fetchall()
+
+        return render_template('vendedores.html', vendedores=vendedores_list, unidades_list=unidades_list)
+    except Exception as e:
+        print(f"[ERRO] Listar vendedores: {e}")
+        return render_template('vendedores.html', vendedores=[], erro="Erro ao carregar vendedores")
+
+
+@app.route('/vendedores/salvar', methods=['POST'])
+@login_required
+def salvar_vendedor():
+    """Salvar/editar vendedor"""
+    try:
+        id_vendedor = request.form.get('id', '').strip()
+        nome = request.form.get('nome', '').strip()
+        id_unidades = request.form.get('id_unidades', '').strip()
+
+        if not nome:
+            return redirect('/vendedores?erro=campos_obrigatorios')
+
+        # Tratar id_unidades vazio como NULL
+        id_unidades = id_unidades if id_unidades else None
+
+        with get_cursor() as (_, cursor):
+            if id_vendedor:
+                # Editar
+                cursor.execute("""
+                    UPDATE vendedores SET
+                        nome=%s, id_unidades=%s
+                    WHERE id=%s
+                """, (nome, id_unidades, id_vendedor))
+            else:
+                # Criar
+                cursor.execute("""
+                    INSERT INTO vendedores
+                    (nome, id_unidades)
+                    VALUES (%s, %s)
+                """, (nome, id_unidades))
+
+        return redirect('/vendedores?ok=salvo')
+
+    except Exception as e:
+        print(f"[ERRO] Salvar vendedor: {e}")
+        return redirect('/vendedores?erro=salvar')
+
+
+@app.route('/vendedores/deletar/<int:id>', methods=['POST'])
+@login_required
+def deletar_vendedor(id):
+    """Deletar vendedor"""
+    try:
+        with get_cursor() as (_, cursor):
+            cursor.execute("DELETE FROM vendedores WHERE id=%s", (id,))
+        return redirect('/vendedores?ok=deletado')
+    except Exception as e:
+        print(f"[ERRO] Deletar vendedor: {e}")
+        return redirect('/vendedores?erro=deletar')
+
+
+# 📞 CONTATOS
+@app.route('/contatos')
+@login_required
+def contatos():
+    """Lista todos os contatos"""
+    try:
+        with get_cursor() as (_, cursor):
+            cursor.execute("SELECT * FROM contatos ORDER BY nome")
+            contatos_list = cursor.fetchall()
+
+        return render_template('contatos.html', contatos=contatos_list)
+    except Exception as e:
+        print(f"[ERRO] Listar contatos: {e}")
+        return render_template('contatos.html', contatos=[], erro="Erro ao carregar contatos")
+
+
+@app.route('/contatos/salvar', methods=['POST'])
+@login_required
+def salvar_contato():
+    """Salvar/editar contato"""
+    try:
+        id_contato = request.form.get('id', '').strip()
+        nome = request.form.get('nome', '').strip()
+        telefone = request.form.get('telefone', '').strip()
+        email = request.form.get('email', '').strip()
+        unidades_acesso = request.form.get('unidades_acesso', '').strip()
+        observacao = request.form.get('observacao', '').strip()
+
+        if not nome or not telefone:
+            return redirect('/contatos?erro=campos_obrigatorios')
+
+        with get_cursor() as (_, cursor):
+            if id_contato:
+                # Editar
+                cursor.execute("""
+                    UPDATE contatos SET
+                        nome=%s, telefone=%s, email=%s,
+                        unidades_acesso=%s, observacao=%s
+                    WHERE id=%s
+                """, (nome, telefone, email, unidades_acesso, observacao, id_contato))
+            else:
+                # Criar
+                cursor.execute("""
+                    INSERT INTO contatos
+                    (nome, telefone, email, unidades_acesso, observacao)
+                    VALUES (%s, %s, %s, %s, %s)
+                """, (nome, telefone, email, unidades_acesso, observacao))
+
+        return redirect('/contatos?ok=salvo')
+
+    except Exception as e:
+        print(f"[ERRO] Salvar contato: {e}")
+        if 'Duplicate entry' in str(e):
+            return redirect('/contatos?erro=telefone_duplicado')
+        return redirect('/contatos?erro=salvar')
+
+
+@app.route('/contatos/deletar/<int:id>', methods=['POST'])
+@login_required
+def deletar_contato(id):
+    """Deletar contato"""
+    try:
+        with get_cursor() as (_, cursor):
+            cursor.execute("DELETE FROM contatos WHERE id=%s", (id,))
+        return redirect('/contatos?ok=deletado')
+    except Exception as e:
+        print(f"[ERRO] Deletar contato: {e}")
+        return redirect('/contatos?erro=deletar')
+
+
+@app.route('/contatos/enviar-mensagem', methods=['POST'])
+@login_required
+def enviar_mensagem_contato():
+    """Enviar mensagem WhatsApp para um contato"""
+    try:
+        id_contato = request.form.get('id_contato', '').strip()
+        mensagem = request.form.get('mensagem', '').strip()
+
+        if not id_contato or not mensagem:
+            return redirect('/contatos?erro=campos_obrigatorios')
+
+        with get_cursor() as (_, cursor):
+            # Buscar contato
+            cursor.execute("SELECT id, nome, telefone FROM contatos WHERE id=%s", (id_contato,))
+            contato = cursor.fetchone()
+
+            if not contato:
+                return redirect('/contatos?erro=contato_nao_encontrado')
+
+            # Aqui você integraria com Twilio ou outra API de WhatsApp
+            # Por enquanto, vamos registrar na tabela de mensagens
+            cursor.execute("""
+                INSERT INTO mensagens_whatsapp
+                (numero_remetente, nome_remetente, mensagem, tipo_mensagem, id_usuario_resposta)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (contato['telefone'], contato['nome'], mensagem, 'contato_saida', session.get('usuario_id')))
+
+        return redirect('/contatos?ok=mensagem_enviada')
+
+    except Exception as e:
+        print(f"[ERRO] Enviar mensagem contato: {e}")
+        return redirect('/contatos?erro=enviar_mensagem')
 
 
 if __name__ == '__main__':
