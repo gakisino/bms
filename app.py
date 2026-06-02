@@ -2001,7 +2001,7 @@ def dashboard_vendedores():
                     SUM(r.visitas) as total_visitas,
                     SUM(r.matriculas) as total_matriculas,
                     COUNT(DISTINCT r.data) as dias_cadastrados,
-                    ROUND(SUM(r.matriculas) / SUM(r.visitas) * 100, 2) as conversao_pct,
+                    ROUND(SUM(r.visitas) / SUM(r.matriculas), 2) as conversao_pct,
                     ROUND(SUM(r.visitas) / COUNT(DISTINCT r.data), 1) as media_diaria_visitas,
                     ROUND(SUM(r.matriculas) / COUNT(DISTINCT r.data), 1) as media_diaria_matriculas
                 FROM ranking r
@@ -2028,7 +2028,7 @@ def dashboard_vendedores():
                     v.nome as vendedor_nome,
                     SUM(r.visitas) as total_visitas,
                     SUM(r.matriculas) as total_matriculas,
-                    ROUND(SUM(r.matriculas) / SUM(r.visitas) * 100, 2) as conversao_pct
+                    ROUND(SUM(r.visitas) / SUM(r.matriculas), 2) as conversao_pct
                 FROM ranking r
                 LEFT JOIN vendedores v ON r.id_vendedores = v.id
                 WHERE MONTH(r.data) = %s AND YEAR(r.data) = %s
@@ -2052,8 +2052,7 @@ def dashboard_vendedores():
 
             totais = cursor.fetchone()
             if totais and totais['total_visitas'] and totais['total_matriculas']:
-                totais['conversao_pct'] = round(totais['total_matriculas'] / totais['total_visitas'] * 100, 2)
-                totais['visitas_por_matricula'] = round(totais['total_visitas'] / totais['total_matriculas'], 2)
+                totais['conversao_pct'] = round(totais['total_visitas'] / totais['total_matriculas'], 2)
             else:
                 totais = {
                     'total_visitas': 0,
@@ -2061,8 +2060,7 @@ def dashboard_vendedores():
                     'total_unidades': 0,
                     'total_vendedores': 0,
                     'dias_cadastrados': 0,
-                    'conversao_pct': 0,
-                    'visitas_por_matricula': 0
+                    'conversao_pct': 0
                 }
 
         return render_template('dashboard_vendedores.html',
