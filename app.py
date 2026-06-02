@@ -1979,13 +1979,20 @@ def dashboard_vendedores():
             mes = datetime.now().month
             ano = datetime.now().year
 
-        # Calcular dias do mês e dias restantes
+        # Calcular dias do mês e dias úteis (segunda a sábado)
         ultima_dia_mes = monthrange(ano, mes)[1]
         dia_atual = date.today().day if date.today().month == mes and date.today().year == ano else ultima_dia_mes
-        dias_restantes = ultima_dia_mes - dia_atual
+
+        # Calcular dias úteis restantes (segunda a sábado)
+        dias_uteis_restantes = 0
+        for dia in range(dia_atual + 1, ultima_dia_mes + 1):
+            data_temp = date(ano, mes, dia)
+            # weekday(): 0=segunda, 1=terça, ..., 4=sexta, 5=sábado, 6=domingo
+            if data_temp.weekday() < 6:  # 0-5 são segunda a sábado
+                dias_uteis_restantes += 1
 
         with get_cursor() as (_, cursor):
-            # RANKING DE UNIDADES
+            # RANKING DE UNIDADES (apenas dias úteis - segunda a sábado)
             cursor.execute("""
                 SELECT
                     u.id,
@@ -2000,16 +2007,17 @@ def dashboard_vendedores():
                 FROM ranking r
                 LEFT JOIN unidades u ON r.id_unidades = u.id
                 WHERE MONTH(r.data) = %s AND YEAR(r.data) = %s
+                    AND DAYOFWEEK(r.data) BETWEEN 2 AND 7
                 GROUP BY u.id, u.sigla, u.nome
                 ORDER BY total_matriculas DESC, total_visitas DESC
             """, (mes, ano))
 
             ranking_unidades = cursor.fetchall()
 
-            # Adicionar projeção para cada unidade
+            # Adicionar projeção para cada unidade (com dias úteis restantes)
             for unidade in ranking_unidades:
-                projecao_visitas = int((unidade['media_diaria_visitas'] * dias_restantes) + unidade['total_visitas'])
-                projecao_matriculas = int((unidade['media_diaria_matriculas'] * dias_restantes) + unidade['total_matriculas'])
+                projecao_visitas = int((unidade['media_diaria_visitas'] * dias_uteis_restantes) + unidade['total_visitas'])
+                projecao_matriculas = int((unidade['media_diaria_matriculas'] * dias_uteis_restantes) + unidade['total_matriculas'])
                 unidade['projecao_visitas'] = projecao_visitas
                 unidade['projecao_matriculas'] = projecao_matriculas
 
@@ -2063,7 +2071,7 @@ def dashboard_vendedores():
                              totais=totais,
                              mes=mes,
                              ano=ano,
-                             dias_restantes=dias_restantes,
+                             dias_uteis_restantes=dias_uteis_restantes,
                              mes_nome=datetime(ano, mes, 1).strftime('%B de %Y'))
     except Exception as e:
         print(f"[ERRO] Dashboard vendedores: {e}")
