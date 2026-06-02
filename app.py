@@ -11,6 +11,19 @@ import os
 app = Flask(__name__)
 app.secret_key = "segredo_super_secreto"
 
+# Filtro customizado para formatar moeda brasileira
+def formatar_moeda(valor):
+    """Formata valor para moeda brasileira: R$ 1.234,56"""
+    if valor is None or valor == '':
+        return '—'
+    try:
+        valor_float = float(valor)
+        return f"R$ {valor_float:,.2f}".replace(',', 'TEMP').replace('.', ',').replace('TEMP', '.')
+    except (ValueError, TypeError):
+        return '—'
+
+app.jinja_env.filters['moeda'] = formatar_moeda
+
 # Cache de IDs das rotinas (carregado dinamicamente do banco)
 ROTINAS_CACHE = {}
 
