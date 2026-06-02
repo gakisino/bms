@@ -2043,8 +2043,9 @@ def dashboard_vendedores():
             """, (mes, ano))
 
             totais = cursor.fetchone()
-            if totais and totais['total_visitas']:
+            if totais and totais['total_visitas'] and totais['total_matriculas']:
                 totais['conversao_pct'] = round(totais['total_matriculas'] / totais['total_visitas'] * 100, 2)
+                totais['visitas_por_matricula'] = round(totais['total_visitas'] / totais['total_matriculas'], 2)
             else:
                 totais = {
                     'total_visitas': 0,
@@ -2052,7 +2053,8 @@ def dashboard_vendedores():
                     'total_unidades': 0,
                     'total_vendedores': 0,
                     'dias_cadastrados': 0,
-                    'conversao_pct': 0
+                    'conversao_pct': 0,
+                    'visitas_por_matricula': 0
                 }
 
         return render_template('dashboard_vendedores.html',
